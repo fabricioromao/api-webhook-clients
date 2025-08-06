@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
 import { Model } from 'mongoose';
 import {
+  QueuesEnum,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
   WebhookSenderRequestType,
@@ -11,12 +12,12 @@ import {
 import { RequestType } from 'src/shared/types/request.types';
 
 @Injectable()
-export class RequestAccountsUseCase {
+export class RequestAccountsMarketingUseCase {
   constructor(
     @InjectModel(WebhookSenderRequests.name)
     private webhookSenderRequestsModel: Model<WebhookSenderRequests>,
 
-    @InjectQueue(WebhookSenderRequestType.ACCOUNTS)
+    @InjectQueue(WebhookSenderRequestType.ACCOUNTS_MARKETING)
     private accountsQueue: Queue,
   ) {}
 
@@ -27,7 +28,7 @@ export class RequestAccountsUseCase {
 
     const existingRequest = await this.webhookSenderRequestsModel
       .findOne({
-        type: WebhookSenderRequestType.ACCOUNTS,
+        type: WebhookSenderRequestType.ACCOUNTS_MARKETING,
         'sender.api_key': sender.api_key,
         reference_date,
         status: { $ne: WebhookSenderRequestStatus.FAILED },
@@ -44,14 +45,14 @@ export class RequestAccountsUseCase {
           api_key: sender.api_key,
           webhook_url: sender.webhook_url,
         },
-        type: WebhookSenderRequestType.ACCOUNTS,
+        type: WebhookSenderRequestType.ACCOUNTS_MARKETING,
         status: WebhookSenderRequestStatus.PENDING,
         reference_date,
       });
 
       await newRequest.save();
 
-      await this.accountsQueue.add(WebhookSenderRequestType.ACCOUNTS, {
+      await this.accountsQueue.add(QueuesEnum.ACCOUNTS_MARKETING, {
         id: newRequest._id,
       });
 

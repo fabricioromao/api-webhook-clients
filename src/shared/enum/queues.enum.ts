@@ -1,3 +1,3 @@
 export enum QueuesEnum {
-  ACCOUNTS = 'accounts',
+  ACCOUNTS_MARKETING = 'accounts_marketing',
 }

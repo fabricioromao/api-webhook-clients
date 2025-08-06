@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { AudioConsumer } from './modules/accounts/accounts.consumer';
+import { AccountsMarketingConsumer } from './modules/accounts-marketing/accounts-marketing.consumer';
 
 @Module({
   imports: [],
   controllers: [],
-  providers: [AudioConsumer],
+  providers: [AccountsMarketingConsumer],
 })
 export class QueuesModule {}

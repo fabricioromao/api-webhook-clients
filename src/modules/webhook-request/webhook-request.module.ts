@@ -8,7 +8,7 @@ import {
   WebhookSenderRequests,
   WebhookSenderRequestsSchema,
 } from 'src/shared';
-import { RequestAccountsUseCase } from './use-cases/request-accounts.use-case';
+import { RequestAccountsMarketingUseCase } from './use-cases/request-accounts-marketing.use-case';
 import { WebhookRequestController } from './webhook-request.controller';
 
 @Module({
@@ -17,14 +17,14 @@ import { WebhookRequestController } from './webhook-request.controller';
       { name: WebhookSenderRequests.name, schema: WebhookSenderRequestsSchema },
     ]),
     BullModule.registerQueue({
-      name: QueuesEnum.ACCOUNTS,
+      name: QueuesEnum.ACCOUNTS_MARKETING,
     }),
     BullBoardModule.forFeature({
-      name: QueuesEnum.ACCOUNTS,
+      name: QueuesEnum.ACCOUNTS_MARKETING,
       adapter: BullMQAdapter,
     }),
   ],
   controllers: [WebhookRequestController],
-  providers: [RequestAccountsUseCase],
+  providers: [RequestAccountsMarketingUseCase],
 })
 export class WebhookRequestModule {}

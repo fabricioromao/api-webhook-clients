@@ -3,14 +3,14 @@ import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ResponseHandlerService } from 'src/shared';
 import type { RequestType } from 'src/shared/types/request.types';
-import { RequestAccountsUseCase } from './use-cases/request-accounts.use-case';
+import { RequestAccountsMarketingUseCase } from './use-cases/request-accounts-marketing.use-case';
 
 @ApiTags('Solicitações de Webhook')
 @Controller('webhook-request')
 export class WebhookRequestController {
   constructor(
     private readonly responseHandlerService: ResponseHandlerService,
-    private readonly requestAccountsUseCase: RequestAccountsUseCase,
+    private readonly requestAccountsMarketingUseCase: RequestAccountsMarketingUseCase,
   ) {}
 
   @Get('accounts-marketing')
@@ -27,7 +27,7 @@ export class WebhookRequestController {
   async requestAccounts(@Res() res: Response, @Req() req: RequestType) {
     return await this.responseHandlerService.handle({
       method: async () => {
-        return await this.requestAccountsUseCase.execute(req);
+        return await this.requestAccountsMarketingUseCase.execute(req);
       },
       res,
     });

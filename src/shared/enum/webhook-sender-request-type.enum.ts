@@ -1,3 +1,3 @@
 export enum WebhookSenderRequestType {
-  ACCOUNTS = 'accounts',
+  ACCOUNTS_MARKETING = 'accounts_marketing',
 }

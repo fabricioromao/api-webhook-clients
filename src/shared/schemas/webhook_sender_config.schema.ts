@@ -9,13 +9,30 @@ export class WebhookSenderConfig extends Document {
   name: string;
 
   @Prop()
+  description: string;
+
+  @Prop({ required: true })
   api_key: string;
 
-  @Prop()
+  @Prop({ required: true, unique: true })
   webhook_url: string;
 
   @Prop()
   webhook_secret: string;
+
+  @Prop({
+    required: true,
+    type: {
+      name: { type: String, required: true, trim: true },
+      email: { type: String, required: true, trim: true },
+      phone: { type: String, required: true, trim: true },
+    },
+  })
+  owner: {
+    name: string;
+    email: string;
+    phone: string;
+  };
 
   @Prop({ type: Date, default: Date.now })
   createdAt: Date;

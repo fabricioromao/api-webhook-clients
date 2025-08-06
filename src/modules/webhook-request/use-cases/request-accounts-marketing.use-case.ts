@@ -17,7 +17,7 @@ export class RequestAccountsMarketingUseCase {
     @InjectModel(WebhookSenderRequests.name)
     private webhookSenderRequestsModel: Model<WebhookSenderRequests>,
 
-    @InjectQueue(WebhookSenderRequestType.ACCOUNTS_MARKETING)
+    @InjectQueue(QueuesEnum.ACCOUNTS_MARKETING)
     private accountsQueue: Queue,
   ) {}
 

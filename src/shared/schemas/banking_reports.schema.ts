@@ -6,128 +6,93 @@ export type BankingReportsDocument = HydratedDocument<BankingReports>;
 @Schema({ collection: 'banking_reports', timestamps: true })
 export class BankingReports {
   @Prop()
-  nr_conta?: string;
+  nr_conta: string;
 
   @Prop()
-  nome_representante?: string;
+  termo_consentimento: string;
 
   @Prop()
-  termo_consentimento?: string;
+  fopa: string;
 
   @Prop()
-  fopa?: string;
+  tipo_conta: string;
 
   @Prop()
-  tipo_conta?: string;
+  primeira_ativacao_conta: string;
 
   @Prop()
-  primeira_ativacao_conta?: string;
+  conta_ativa_30dd: string;
 
   @Prop()
-  conta_ativa_30dd?: string;
+  cartao: string;
 
   @Prop()
-  cartao?: string;
+  pap_clean_cartao: string;
 
   @Prop()
-  pap_clean_cartao?: string;
+  pap_lastreado_cartao: string;
 
   @Prop()
-  pap_lastreado_cartao?: string;
+  c_clean_cartao: string;
 
   @Prop()
-  c_clean_cartao?: string;
+  c_lastreado_cartao: string;
 
   @Prop()
-  c_lastreado_cartao?: string;
+  primeira_ativacao_cartao: string;
 
   @Prop()
-  primeira_ativacao_cartao?: string;
+  cartao_ativa_30dd: string;
 
   @Prop()
-  cartao_ativa_30dd?: string;
+  cheque_aprovado: string;
 
   @Prop()
-  cheque_aprovado?: string;
+  cheque_contratado: string;
 
   @Prop()
-  cheque_contratado?: string;
+  cp_contratado: string;
 
   @Prop()
-  cp_contratado?: string;
+  prioridade_contato_cp: string;
 
   @Prop()
-  prioridade_contato_cp?: string;
+  cobranca: string;
 
   @Prop()
-  cobranca?: string;
+  saldo_banking: string;
 
   @Prop()
-  saldo_banking?: string;
+  prog_relacionamento: string;
 
   @Prop()
-  plano_conta?: string;
+  seguro_vida: string;
 
   @Prop()
-  prog_relacionamento?: string;
+  seguro_conta_cartao: string;
 
   @Prop()
-  iof_especial?: string;
+  seguro_prestamista: string;
 
   @Prop()
-  sala_vip?: string;
+  assessor: string;
 
   @Prop()
-  seguro_vida?: string;
+  cd_cge_partner: string;
 
   @Prop()
-  seguro_conta_cartao?: string;
+  dt_aquisicao_cartao: string;
 
   @Prop()
-  seguro_prestamista?: string;
+  portabilidade: string;
 
   @Prop()
-  assessor?: string;
-
-  @Prop()
-  cd_cge_partner?: string;
-
-  @Prop()
-  dt_abertura_conta?: string;
-
-  @Prop()
-  dt_aquisicao_cartao?: string;
-
-  @Prop()
-  termo_cons_simplificado?: string;
-
-  @Prop()
-  cons_produto_serviço?: string;
-
-  @Prop()
-  vl_auc_total?: string;
-
-  @Prop()
-  venda_via_portal?: string;
-
-  @Prop()
-  carr_abandonado_cartao?: string;
-
-  @Prop()
-  cliente_heavy_user?: string;
-
-  @Prop()
-  cp_carr_abandonado?: string;
-
-  @Prop()
-  deb_automático?: string;
-
-  @Prop()
-  portabilidade?: string;
-
-  @Prop()
-  chave_pix?: string;
+  chave_pix: string;
 }
 
 export const BankingReportsSchema =
   SchemaFactory.createForClass(BankingReports);
+
+BankingReportsSchema.index({
+  nr_conta: 1,
+});

@@ -96,6 +96,9 @@ export class Accounts {
   dt_vinculo: Date;
 
   @Prop()
+  dt_vinculo_escritorio: Date;
+
+  @Prop()
   dt_primeiro_investimento: Date;
 
   @Prop()

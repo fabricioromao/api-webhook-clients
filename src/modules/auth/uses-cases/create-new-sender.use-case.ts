@@ -18,8 +18,15 @@ export class CreateNewSenderUseCase implements OnModuleInit {
 
   async onModuleInit() {
     // await this.execute({
-    //   name: 'Teste',
+    //   name: 'Autem Marketing',
+    //   description:
+    //     'Envio de dados das contas para o  departamennto de marketing via webhook',
     //   webhook_url: 'https://localhost:2022/webhook-request/accounts',
+    //   owner: {
+    //     name: 'Alana Gabriele',
+    //     email: 'owner@example.com',
+    //     phone: '1234567890',
+    //   },
     // });
   }
 
@@ -44,6 +51,8 @@ export class CreateNewSenderUseCase implements OnModuleInit {
       api_key: apiKey,
       webhook_url: body.webhook_url,
       webhook_secret: this.generetaWebhookSecret(apiKey),
+      owner: body.owner,
+      description: body.description,
     });
 
     if (!newSender) {

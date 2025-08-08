@@ -154,13 +154,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
 
     output.write(this.fields().join(',') + '\n');
 
-    let log = false;
     for await (const account of accountsCursor) {
-      if (!log) {
-        console.log(account);
-        log = true;
-      }
-
       const banking = bankingMap.get(account.nr_conta);
       const openFinance = financeMap.get(account.nr_conta) || [];
 

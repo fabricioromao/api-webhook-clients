@@ -20,6 +20,7 @@ import {
   WebhookSenderRequestStatus,
 } from 'src/shared';
 import { AccountsMarketingDto } from 'src/shared/dto';
+import { formatDate } from 'src/shared/utils';
 
 @Processor(QueuesEnum.ACCOUNTS_MARKETING)
 export class AccountsMarketingConsumer extends WorkerHost {
@@ -159,6 +160,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
         console.log(account);
         log = true;
       }
+
       const banking = bankingMap.get(account.nr_conta);
       const openFinance = financeMap.get(account.nr_conta) || [];
 
@@ -181,15 +183,15 @@ export class AccountsMarketingConsumer extends WorkerHost {
         estado_civil: account.estado_civil,
         estado: account.endereco_estado,
         cidade: account.endereco_cidade,
-        dt_vinculo: account.dt_vinculo?.toString().split('T')[0],
+        dt_vinculo: account.dt_vinculo ? formatDate(account.dt_vinculo) : '',
         dt_vinculo_escritorio: account.dt_vinculo_escritorio
-          ?.toString()
-          .split('T')[0],
+          ? formatDate(account.dt_vinculo_escritorio)
+          : '',
         perfil_investidor: account.perfil_investidor,
         faixa_cliente: account.faixa_cliente,
         dt_primeiro_investimento: account.dt_primeiro_investimento
-          ?.toString()
-          .split('T')[0],
+          ? formatDate(account.dt_primeiro_investimento)
+          : '',
         pl_conta_corrente: account.pl_conta_corrente,
         pl_total: account.pl_total,
         pl_fundos: account.pl_fundos,

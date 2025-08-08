@@ -158,9 +158,9 @@ export class StorageUploadUtilsService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.deleteFromStorage(
-      'b2d4ec7e-16bd-483a-882f-bc904970e699/2025-08-07/clients_marketing.csv.zip',
-    );
+    // await this.deleteFromStorage(
+    //   'b2d4ec7e-16bd-483a-882f-bc904970e699/2025-08-07/clients_marketing.csv.zip',
+    // );
   }
 
   async deleteFromStorage(filePath: string): Promise<boolean> {

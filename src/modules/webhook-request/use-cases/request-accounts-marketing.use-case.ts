@@ -11,6 +11,7 @@ import {
 } from 'src/shared';
 import { AccountsMarketingDto } from 'src/shared/dto';
 import { RequestType } from 'src/shared/types/request.types';
+import { formatDate } from 'src/shared/utils';
 
 @Injectable()
 export class RequestAccountsMarketingUseCase {
@@ -25,7 +26,7 @@ export class RequestAccountsMarketingUseCase {
   async execute(req: RequestType) {
     const { sender } = req;
 
-    const reference_date = new Date().toISOString().split('T')[0];
+    const reference_date = formatDate(new Date(), 'yyyy-MM-dd');
 
     const existingRequest = await this.webhookSenderRequestsModel
       .findOne({

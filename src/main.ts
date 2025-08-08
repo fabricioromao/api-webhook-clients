@@ -1,6 +1,8 @@
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { EnvSchemaType } from './shared';
 import { swagger } from './swagger';
 
 async function bootstrap() {
@@ -25,7 +27,17 @@ async function bootstrap() {
   app.setGlobalPrefix(PREFIX);
 
   swagger(app);
+  const configService = app.get(ConfigService<EnvSchemaType>);
+  const logger = new Logger('Main');
+  const PORT = configService.getOrThrow('PORT');
 
-  await app.listen(process.env.PORT ?? 3000);
+  try {
+    await app.listen(PORT);
+    logger.debug(
+      `Application is running on: http://localhost:${PORT}/${PREFIX}`,
+    );
+  } catch (error) {
+    logger.error('Error during application bootstrap', error);
+  }
 }
 bootstrap();

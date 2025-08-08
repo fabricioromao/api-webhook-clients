@@ -10,7 +10,7 @@ import {
   EnvSchemaType,
   envValidationSchema,
 } from './environment/environment.schema';
-import { ResponseHandlerService } from './service';
+import { ResponseHandlerService, StorageUploadUtilsService } from './service';
 
 @Global()
 @Module({
@@ -73,7 +73,7 @@ import { ResponseHandlerService } from './service';
       }),
     }),
   ],
-  providers: [ResponseHandlerService],
+  providers: [ResponseHandlerService, StorageUploadUtilsService],
   exports: [ConfigModule, ResponseHandlerService],
 })
 export class SharedModule {}

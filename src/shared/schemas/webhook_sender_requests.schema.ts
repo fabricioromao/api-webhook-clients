@@ -32,6 +32,9 @@ export class WebhookSenderRequests extends Document {
   @Prop()
   upload_url: string;
 
+  @Prop()
+  signed_url: string;
+
   @Prop({ required: true })
   reference_date: string;
 

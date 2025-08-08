@@ -1,21 +1,32 @@
+import { HttpService } from '@nestjs/axios';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Job } from 'bullmq';
 import { createWriteStream } from 'fs';
+import * as fs from 'fs/promises';
 import { Parser } from 'json2csv';
 import { Model } from 'mongoose';
 import { join } from 'path';
+import { lastValueFrom } from 'rxjs';
+
 import {
   Accounts,
   BankingReports,
   OpenFinance,
   QueuesEnum,
+  StorageUploadUtilsService,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
 } from 'src/shared';
+import { AccountsMarketingDto } from 'src/shared/dto';
 
 @Processor(QueuesEnum.ACCOUNTS_MARKETING)
 export class AccountsMarketingConsumer extends WorkerHost {
+  private logger = new Logger(AccountsMarketingConsumer.name);
+
+  private filePath = join(process.cwd(), 'clients_marketing.csv');
+
   constructor(
     @InjectModel(WebhookSenderRequests.name)
     private webhookSenderRequestsModel: Model<WebhookSenderRequests>,
@@ -25,50 +36,103 @@ export class AccountsMarketingConsumer extends WorkerHost {
     private bankingReportsModel: Model<BankingReports>,
     @InjectModel(OpenFinance.name)
     private openFinanceModel: Model<OpenFinance>,
+
+    private readonly storageUploadUtilsService: StorageUploadUtilsService,
+    private readonly http: HttpService,
   ) {
     super();
   }
 
-  async process(job: Job<{ id: string }>) {
-    const { id } = job.data;
+  async process(job: Job<AccountsMarketingDto>) {
+    const { id, apiKey, referenceDate, webhookUrl } = job.data;
 
-    const request = await this.webhookSenderRequestsModel
-      .findById(id)
-      .select('webhook_url status')
-      .lean()
-      .exec();
+    const [existingRequest, currentRequest] = await Promise.all([
+      this.webhookSenderRequestsModel
+        .findOne({
+          'sender.api_key': apiKey,
+          reference_date: referenceDate,
+          status: WebhookSenderRequestStatus.COMPLETED,
+        })
+        .sort({ createdAt: -1 })
+        .select('webhook_url status upload_url')
+        .lean()
+        .exec(),
 
-    if (!request) {
+      this.webhookSenderRequestsModel
+        .findById(id)
+        .select('webhook_url status')
+        .lean()
+        .exec(),
+    ]);
+
+    if (!currentRequest) {
       throw new Error('Solicitação não encontrada com o ID: ' + id);
     }
 
-    if (request.status !== WebhookSenderRequestStatus.PENDING) {
+    if (currentRequest.status !== WebhookSenderRequestStatus.PENDING) {
       throw new Error(
-        'Solicitação já processada. Status atual: ' + request.status,
+        'Solicitação já processada. Status atual: ' + currentRequest.status,
       );
     }
 
-    // update request status to PROCESSING
+    if (existingRequest) {
+      const signedUrl =
+        await this.storageUploadUtilsService.signedUrlWithExpiration(
+          this.storageUploadUtilsService.getRelativeFilePath(
+            existingRequest.upload_url!,
+          ),
+        );
 
-    await this.generateCsvFromCollections();
+      await this.updateRequest({
+        id,
+        upload_url: existingRequest.upload_url,
+        signed_url: signedUrl,
+      });
 
-    // upload to drive and share the link with expiration (15min)
+      return await this.sendToSenderWebhook({
+        requestId: id,
+        webhook_url: webhookUrl!,
+        signed_url: signedUrl,
+      });
+    }
 
-    // update request with upload_url and status COMPLETED
+    const zipFile = await this.generateCsvFromCollections();
 
-    return {};
+    const uploadUrl = await this.storageUploadUtilsService.uploadToStorage({
+      apiKey,
+      filePath: zipFile,
+      referenceDate,
+    });
+
+    const signedUrl =
+      await this.storageUploadUtilsService.signedUrlWithExpiration(
+        this.storageUploadUtilsService.getRelativeFilePath(uploadUrl),
+      );
+
+    // delete the local file after upload
+    await fs.unlink(zipFile);
+
+    await this.updateRequest({
+      id,
+      upload_url: uploadUrl,
+      signed_url: signedUrl,
+    });
+
+    return await this.sendToSenderWebhook({
+      requestId: id,
+      webhook_url: webhookUrl!,
+      signed_url: signedUrl,
+    });
   }
 
   async generateCsvFromCollections() {
     const accountsCursor = this.accountsModel.find().lean().cursor();
 
-    const output = createWriteStream(
-      join(process.cwd(), 'clients_marketing.csv'),
-    );
+    const output = createWriteStream(this.filePath);
 
-    const parserWithHeader = new Parser({ fields: this.fields() });
     const parserWithoutHeader = new Parser({
       fields: this.fields(),
+      quote: '"',
       header: false,
     });
 
@@ -87,9 +151,14 @@ export class AccountsMarketingConsumer extends WorkerHost {
       financeMap?.get(f.nr_conta)?.push(f);
     }
 
-    output.write(parserWithHeader.parse([{}]) + '\n');
+    output.write(this.fields().join(',') + '\n');
 
+    let log = false;
     for await (const account of accountsCursor) {
+      if (!log) {
+        console.log(account);
+        log = true;
+      }
       const banking = bankingMap.get(account.nr_conta);
       const openFinance = financeMap.get(account.nr_conta) || [];
 
@@ -112,11 +181,15 @@ export class AccountsMarketingConsumer extends WorkerHost {
         estado_civil: account.estado_civil,
         estado: account.endereco_estado,
         cidade: account.endereco_cidade,
-        dt_vinculo: account.dt_vinculo,
-        dt_vinculo_escritorio: account.dt_vinculo_escritorio,
+        dt_vinculo: account.dt_vinculo?.toString().split('T')[0],
+        dt_vinculo_escritorio: account.dt_vinculo_escritorio
+          ?.toString()
+          .split('T')[0],
         perfil_investidor: account.perfil_investidor,
         faixa_cliente: account.faixa_cliente,
-        dt_primeiro_investimento: account.dt_primeiro_investimento,
+        dt_primeiro_investimento: account.dt_primeiro_investimento
+          ?.toString()
+          .split('T')[0],
         pl_conta_corrente: account.pl_conta_corrente,
         pl_total: account.pl_total,
         pl_fundos: account.pl_fundos,
@@ -169,6 +242,70 @@ export class AccountsMarketingConsumer extends WorkerHost {
     }
 
     output.end();
+
+    const zipFile = await this.storageUploadUtilsService.zipFile(this.filePath);
+
+    await fs.unlink(this.filePath);
+
+    return zipFile;
+  }
+
+  async updateRequest(body: {
+    id: string;
+    status?: WebhookSenderRequestStatus;
+    upload_url?: string;
+    signed_url?: string;
+    error_api?: string;
+  }) {
+    return await this.webhookSenderRequestsModel.updateOne(
+      {
+        _id: body.id,
+      },
+      {
+        ...body,
+        updatedAt: new Date(),
+      },
+    );
+  }
+
+  async sendToSenderWebhook(data: {
+    requestId: string;
+    webhook_url: string;
+    signed_url: string;
+  }) {
+    const { webhook_url, signed_url, requestId } = data;
+
+    try {
+      const response = await lastValueFrom(
+        this.http.post(
+          webhook_url,
+          { data: signed_url },
+          {
+            validateStatus: (status) => status === 200 || status === 201,
+          },
+        ),
+      );
+
+      await this.updateRequest({
+        id: requestId,
+        status: WebhookSenderRequestStatus.COMPLETED,
+        signed_url,
+      });
+
+      this.logger.debug(
+        `Dados enviados com sucesso para o webhook: ${webhook_url}`,
+      );
+    } catch (error) {
+      await this.updateRequest({
+        id: requestId,
+        status: WebhookSenderRequestStatus.FAILED,
+        error_api: error.message,
+      });
+
+      throw Error(
+        `Erro ao enviar dados para o webhook ${webhook_url}: ${error.message}`,
+      );
+    }
   }
 
   private fields(): string[] {

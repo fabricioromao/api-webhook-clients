@@ -30,6 +30,7 @@ export class WebhookRequestController {
         return await this.requestAccountsMarketingUseCase.execute(req);
       },
       res,
+      successMessage: 'Solicitação de dados enviada com sucesso.',
     });
   }
 }

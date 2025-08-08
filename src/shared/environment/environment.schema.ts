@@ -9,6 +9,7 @@ export interface EnvSchemaType {
   REDIS_PASSWORD: string;
   JWT_SECRET: string;
   BULL_BOARD_PASSWORD: string;
+  GOOGLE_CLOUD_STORAGE_BUCKET_NAME: string;
 }
 export const envValidationSchema = Joi.object<EnvSchemaType>({
   PORT: Joi.number().required(),
@@ -19,4 +20,5 @@ export const envValidationSchema = Joi.object<EnvSchemaType>({
   REDIS_PASSWORD: Joi.string().required(),
   JWT_SECRET: Joi.string().required(),
   BULL_BOARD_PASSWORD: Joi.string().required(),
+  GOOGLE_CLOUD_STORAGE_BUCKET_NAME: Joi.string().required(),
 });

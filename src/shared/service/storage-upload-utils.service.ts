@@ -1,12 +1,12 @@
 import { Storage } from '@google-cloud/storage';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import AdmZip from 'adm-zip';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
 @Injectable()
-export class StorageUploadUtilsService implements OnModuleInit {
+export class StorageUploadUtilsService {
   private logger = new Logger(StorageUploadUtilsService.name);
 
   private storage: Storage;
@@ -155,12 +155,6 @@ export class StorageUploadUtilsService implements OnModuleInit {
       );
       throw new Error(`Erro na verificação: ${error.message}`);
     }
-  }
-
-  async onModuleInit() {
-    // await this.deleteFromStorage(
-    //   'b2d4ec7e-16bd-483a-882f-bc904970e699/2025-08-07/clients_marketing.csv.zip',
-    // );
   }
 
   async deleteFromStorage(filePath: string): Promise<boolean> {

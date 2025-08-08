@@ -38,7 +38,7 @@ import { ResponseHandlerService, StorageUploadUtilsService } from './service';
       global: true,
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow('JWT_SECRET'),
-        signOptions: { expiresIn: '1h' },
+        signOptions: { expiresIn: '5m' },
       }),
       inject: [ConfigService],
     }),

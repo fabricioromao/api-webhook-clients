@@ -23,12 +23,12 @@ services:
       - '${REDIS_PORT}:${REDIS_PORT}'
     volumes:
       - redis:/data
-    # networks:
-    #   - redis_external_network
+    networks:
+      - redis_external_network
 
 volumes:
   redis:
     driver: local
-# networks:
-#   redis_external_network:
-#     external: true
+networks:
+  redis_external_network:
+    external: true

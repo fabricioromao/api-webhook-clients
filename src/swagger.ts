@@ -99,7 +99,7 @@ Todos os endpoints (exceto geração de token) requerem autenticação via JWT B
   };
 
   app.use(
-    '/reference',
+    '/docs',
     apiReference({
       content,
       layout: 'modern',

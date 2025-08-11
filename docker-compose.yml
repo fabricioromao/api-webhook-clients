@@ -1,34 +1,34 @@
 services:
-  # api-webhook-clients:
-  #   image: api-webhook-clients
-  #   build:
-  #     context: .
-  #     dockerfile: ./Dockerfile
-  #   restart: always
-  #   env_file: .env
-  #   ports:
-  #     - '${PORT}:${PORT}'
-  #   networks:
-  #     - redis_external_network
-
-  redis:
-    container_name: 'redis'
-    image: bitnami/redis:latest
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_PORT_NUMBER=${REDIS_PORT}
-    command: /opt/bitnami/scripts/redis/run.sh
-    restart: unless-stopped
+  api-webhook-clients:
+    image: api-webhook-clients
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: always
+    env_file: .env
     ports:
-      - '${REDIS_PORT}:${REDIS_PORT}'
-    volumes:
-      - redis:/data
+      - '${PORT}:${PORT}'
     networks:
       - redis_external_network
 
-volumes:
-  redis:
-    driver: local
+  # redis:
+  #   container_name: 'redis'
+  #   image: bitnami/redis:latest
+  #   environment:
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #     - REDIS_PORT_NUMBER=${REDIS_PORT}
+  #   command: /opt/bitnami/scripts/redis/run.sh
+  #   restart: unless-stopped
+  #   ports:
+  #     - '${REDIS_PORT}:${REDIS_PORT}'
+  #   volumes:
+  #     - redis:/data
+  #   networks:
+  #     - redis_external_network
+
+# volumes:
+#   redis:
+#     driver: local
 networks:
   redis_external_network:
     external: true

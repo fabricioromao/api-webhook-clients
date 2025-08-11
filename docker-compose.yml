@@ -1,6 +1,6 @@
 services:
   api-webhook-clients:
-    image: api-webhook-clients
+    container_name: 'api-webhook-clients'
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -10,6 +10,7 @@ services:
       - '${PORT}:${PORT}'
     networks:
       - redis_external_network
+      - kong-net
 
   # redis:
   #   container_name: 'redis'
@@ -31,4 +32,6 @@ services:
 #     driver: local
 networks:
   redis_external_network:
+    external: true
+  kong-net:
     external: true

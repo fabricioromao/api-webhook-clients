@@ -7,7 +7,6 @@ import { swagger } from './swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const PREFIX = 'api';
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -24,7 +23,6 @@ async function bootstrap() {
       },
     }),
   );
-  app.setGlobalPrefix(PREFIX);
 
   swagger(app);
   const configService = app.get(ConfigService<EnvSchemaType>);
@@ -33,9 +31,7 @@ async function bootstrap() {
 
   try {
     await app.listen(PORT);
-    logger.debug(
-      `Application is running on: http://localhost:${PORT}/${PREFIX}`,
-    );
+    logger.debug(`Application is running on: http://localhost:${PORT}`);
   } catch (error) {
     logger.error('Error during application bootstrap', error);
   }

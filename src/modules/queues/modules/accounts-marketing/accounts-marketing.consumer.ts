@@ -47,6 +47,10 @@ export class AccountsMarketingConsumer extends WorkerHost {
   async process(job: Job<AccountsMarketingDto>) {
     const { id, apiKey, referenceDate, webhookUrl } = job.data;
 
+    if (!webhookUrl) {
+      throw new Error('Webhook URL não fornecida');
+    }
+
     const [existingRequest, currentRequest] = await Promise.all([
       this.webhookSenderRequestsModel
         .findOne({
@@ -55,13 +59,13 @@ export class AccountsMarketingConsumer extends WorkerHost {
           status: WebhookSenderRequestStatus.COMPLETED,
         })
         .sort({ createdAt: -1 })
-        .select('webhook_url status upload_url')
+        .select('status upload_url')
         .lean()
         .exec(),
 
       this.webhookSenderRequestsModel
         .findById(id)
-        .select('webhook_url status')
+        .select('status')
         .lean()
         .exec(),
     ]);

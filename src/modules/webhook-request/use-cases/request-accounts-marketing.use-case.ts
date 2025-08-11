@@ -50,7 +50,7 @@ export class RequestAccountsMarketingUseCase {
         id: sender.id,
         name: sender.name,
         api_key: sender.api_key,
-        webhook_url: sender.webhook_url,
+        webhook_url: sender?.webhook_url || '',
       },
       type: WebhookSenderRequestType.ACCOUNTS_MARKETING,
       status: WebhookSenderRequestStatus.PENDING,
@@ -69,7 +69,7 @@ export class RequestAccountsMarketingUseCase {
         id: savedRequest._id as string,
         apiKey: sender.api_key,
         referenceDate: reference_date,
-        webhookUrl: sender.webhook_url,
+        webhookUrl: sender?.webhook_url || '',
       }),
     );
 

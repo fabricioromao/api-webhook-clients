@@ -18,14 +18,14 @@ export class CreateNewSenderUseCase implements OnModuleInit {
 
   async onModuleInit() {
     // await this.execute({
-    //   name: 'Autem Marketing',
+    //   name: '',
     //   description:
     //     'Envio de dados das contas para o  departamennto de marketing via webhook',
-    //   webhook_url: 'https://localhost:2022/webhook-request/accounts',
+    //   webhook_url: '',
     //   owner: {
-    //     name: 'Alana Gabriele',
-    //     email: 'owner@example.com',
-    //     phone: '1234567890',
+    //     name: '',
+    //     email: '',
+    //     phone: '',
     //   },
     // });
   }

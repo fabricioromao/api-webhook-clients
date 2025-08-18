@@ -47,6 +47,8 @@ export class AccountsMarketingConsumer extends WorkerHost {
   async process(job: Job<AccountsMarketingDto>) {
     const { id, apiKey, referenceDate, webhookUrl } = job.data;
 
+    this.logger.debug(`Processando solicitação: ${id}`);
+
     if (!webhookUrl) {
       throw new Error('Webhook URL não fornecida');
     }

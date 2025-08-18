@@ -45,54 +45,84 @@ export class AccountsMarketingConsumer extends WorkerHost {
   }
 
   async process(job: Job<AccountsMarketingDto>) {
-    const { id, apiKey, referenceDate, webhookUrl } = job.data;
+    try {
+      const { id, apiKey, referenceDate, webhookUrl } = job.data;
 
-    this.logger.debug(`Processando solicitação: ${id}`);
+      this.logger.debug(`Processando solicitação: ${id}`);
 
-    if (!webhookUrl) {
-      throw new Error('Webhook URL não fornecida');
-    }
+      if (!webhookUrl) {
+        throw new Error('Webhook URL não fornecida');
+      }
 
-    const [existingRequest, currentRequest] = await Promise.all([
-      this.webhookSenderRequestsModel
-        .findOne({
-          'sender.api_key': apiKey,
-          reference_date: referenceDate,
-          status: WebhookSenderRequestStatus.COMPLETED,
-        })
-        .sort({ createdAt: -1 })
-        .select('status upload_url')
-        .lean()
-        .exec(),
+      const [existingRequest, currentRequest] = await Promise.all([
+        this.webhookSenderRequestsModel
+          .findOne({
+            'sender.api_key': apiKey,
+            reference_date: referenceDate,
+            status: WebhookSenderRequestStatus.COMPLETED,
+          })
+          .sort({ createdAt: -1 })
+          .select('status upload_url')
+          .lean()
+          .exec(),
 
-      this.webhookSenderRequestsModel
-        .findById(id)
-        .select('status')
-        .lean()
-        .exec(),
-    ]);
+        this.webhookSenderRequestsModel
+          .findById(id)
+          .select('status')
+          .lean()
+          .exec(),
+      ]);
 
-    if (!currentRequest) {
-      throw new Error('Solicitação não encontrada com o ID: ' + id);
-    }
+      if (!currentRequest) {
+        throw new Error('Solicitação não encontrada com o ID: ' + id);
+      }
 
-    if (currentRequest.status !== WebhookSenderRequestStatus.PENDING) {
-      throw new Error(
-        'Solicitação já processada. Status atual: ' + currentRequest.status,
-      );
-    }
+      if (currentRequest.status !== WebhookSenderRequestStatus.PENDING) {
+        throw new Error(
+          'Solicitação já processada. Status atual: ' + currentRequest.status,
+        );
+      }
 
-    if (existingRequest) {
+      if (existingRequest) {
+        const signedUrl =
+          await this.storageUploadUtilsService.signedUrlWithExpiration(
+            this.storageUploadUtilsService.getRelativeFilePath(
+              existingRequest.upload_url!,
+            ),
+          );
+
+        await this.updateRequest({
+          id,
+          upload_url: existingRequest.upload_url,
+          signed_url: signedUrl,
+        });
+
+        return await this.sendToSenderWebhook({
+          requestId: id,
+          webhook_url: webhookUrl!,
+          signed_url: signedUrl,
+        });
+      }
+
+      const zipFile = await this.generateCsvFromCollections();
+
+      const uploadUrl = await this.storageUploadUtilsService.uploadToStorage({
+        apiKey,
+        filePath: zipFile,
+        referenceDate,
+      });
+
       const signedUrl =
         await this.storageUploadUtilsService.signedUrlWithExpiration(
-          this.storageUploadUtilsService.getRelativeFilePath(
-            existingRequest.upload_url!,
-          ),
+          this.storageUploadUtilsService.getRelativeFilePath(uploadUrl),
         );
+
+      // delete the local file after upload
+      await fs.unlink(zipFile);
 
       await this.updateRequest({
         id,
-        upload_url: existingRequest.upload_url,
+        upload_url: uploadUrl,
         signed_url: signedUrl,
       });
 
@@ -101,35 +131,16 @@ export class AccountsMarketingConsumer extends WorkerHost {
         webhook_url: webhookUrl!,
         signed_url: signedUrl,
       });
-    }
-
-    const zipFile = await this.generateCsvFromCollections();
-
-    const uploadUrl = await this.storageUploadUtilsService.uploadToStorage({
-      apiKey,
-      filePath: zipFile,
-      referenceDate,
-    });
-
-    const signedUrl =
-      await this.storageUploadUtilsService.signedUrlWithExpiration(
-        this.storageUploadUtilsService.getRelativeFilePath(uploadUrl),
+    } catch (error) {
+      this.logger.error(
+        `Erro ao processar solicitação: ${job.data.id} - ${error.message}`,
       );
-
-    // delete the local file after upload
-    await fs.unlink(zipFile);
-
-    await this.updateRequest({
-      id,
-      upload_url: uploadUrl,
-      signed_url: signedUrl,
-    });
-
-    return await this.sendToSenderWebhook({
-      requestId: id,
-      webhook_url: webhookUrl!,
-      signed_url: signedUrl,
-    });
+      await this.updateRequest({
+        id: job.data.id,
+        status: WebhookSenderRequestStatus.FAILED,
+        internal_error: error.message,
+      });
+    }
   }
 
   async generateCsvFromCollections() {
@@ -258,6 +269,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
     upload_url?: string;
     signed_url?: string;
     error_api?: string;
+    internal_error?: string;
   }) {
     return await this.webhookSenderRequestsModel.updateOne(
       {
@@ -278,7 +290,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
     const { webhook_url, signed_url, requestId } = data;
 
     try {
-      const response = await lastValueFrom(
+      await lastValueFrom(
         this.http.post(
           webhook_url,
           { data: signed_url },
@@ -298,15 +310,11 @@ export class AccountsMarketingConsumer extends WorkerHost {
         `Dados enviados com sucesso para o webhook: ${webhook_url}`,
       );
     } catch (error) {
-      await this.updateRequest({
+      return await this.updateRequest({
         id: requestId,
         status: WebhookSenderRequestStatus.FAILED,
         error_api: error.message,
       });
-
-      throw Error(
-        `Erro ao enviar dados para o webhook ${webhook_url}: ${error.message}`,
-      );
     }
   }
 

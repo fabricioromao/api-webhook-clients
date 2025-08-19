@@ -106,6 +106,7 @@ Todos os endpoints (exceto geração de token) requerem autenticação via JWT B
       theme: 'bluePlanet',
       darkMode: true,
       hideDownloadButton: true,
+      baseServerURL: 'https://app.galaxyerp.com.br/v1/api-webhook-clients',
     }),
   );
 };

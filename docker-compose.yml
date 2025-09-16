@@ -11,20 +11,20 @@ services:
     networks:
       - redis_external_network
       - kong-net
-  # redis:
-  #   container_name: 'redis'
-  #   image: bitnami/redis:latest
-  #   environment:
-  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
-  #     - REDIS_PORT_NUMBER=${REDIS_PORT}
-  #   command: /opt/bitnami/scripts/redis/run.sh
-  #   restart: unless-stopped
-  #   ports:
-  #     - '${REDIS_PORT}:${REDIS_PORT}'
-  #   volumes:
-  #     - redis:/data
-  # networks:
-  #   - redis_external_network
+#   redis:
+#     container_name: 'redis'
+#     image: bitnami/redis:latest
+#     environment:
+#       - REDIS_PASSWORD=${REDIS_PASSWORD}
+#       - REDIS_PORT_NUMBER=${REDIS_PORT}
+#     command: /opt/bitnami/scripts/redis/run.sh
+#     restart: unless-stopped
+#     ports:
+#       - '${REDIS_PORT}:${REDIS_PORT}'
+#     volumes:
+#       - redis:/data
+#     networks:
+#       - redis_external_network
 
 # volumes:
 #   redis:

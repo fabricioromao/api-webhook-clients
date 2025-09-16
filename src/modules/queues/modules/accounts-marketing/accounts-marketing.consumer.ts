@@ -133,11 +133,14 @@ export class AccountsMarketingConsumer extends WorkerHost {
   }
 
   async generateCsvFromCollections() {
-    const accountsCursor = this.accountsModel.find().lean().cursor();
+    const accountsCursor = this.accountsModel
+      .find()
+      .lean()
+      .cursor({ batchSize: 1_000 }); // lotes de 1000 (não muda o total)
 
     const output = createWriteStream(this.filePath);
 
-    const parserWithoutHeader = new Parser({
+    const parser = new Parser({
       fields: this.fields(),
       quote: '"',
       header: false,
@@ -149,15 +152,13 @@ export class AccountsMarketingConsumer extends WorkerHost {
     ]);
 
     const bankingMap = new Map(bankingReports.map((b) => [b.nr_conta, b]));
-
     const financeMap = new Map<string, OpenFinance[]>();
-
     for (const f of openFinances) {
       if (!financeMap.has(f.nr_conta)) financeMap.set(f.nr_conta, []);
-
-      financeMap?.get(f.nr_conta)?.push(f);
+      financeMap.get(f.nr_conta)!.push(f);
     }
 
+    // header
     output.write(this.fields().join(',') + '\n');
 
     for await (const account of accountsCursor) {
@@ -171,11 +172,17 @@ export class AccountsMarketingConsumer extends WorkerHost {
           )
         : null;
 
+      const { score, tier } = this.getTierAndScoreByPl({
+        pl_total: account.pl_total,
+      });
+
       const row = {
         nr_conta: account.nr_conta,
         nome_completo: account.nome_completo,
         email: account.email,
         documento_cpf_cnpj: account.documento_cpf_cnpj,
+        tier,
+        score,
         dt_nascimento: account.dt_nascimento,
         idade,
         tipo_cliente: account.tipo_cliente,
@@ -240,15 +247,18 @@ export class AccountsMarketingConsumer extends WorkerHost {
           : 0,
       };
 
-      output.write(parserWithoutHeader.parse([row]) + '\n');
+      output.write(parser.parse([row]) + '\n');
     }
 
-    output.end();
+    // AGORA espere o stream terminar
+    await new Promise<void>((resolve, reject) => {
+      output.on('finish', resolve);
+      output.on('error', reject);
+      output.end();
+    });
 
     const zipFile = await this.storageUploadUtilsService.zipFile(this.filePath);
-
     await fs.unlink(this.filePath);
-
     return zipFile;
   }
 
@@ -310,12 +320,27 @@ export class AccountsMarketingConsumer extends WorkerHost {
     }
   }
 
+  private getTierAndScoreByPl({ pl_total }: { pl_total: number | null }) {
+    if (pl_total === null) return { tier: '', score: 0 };
+
+    if (pl_total > 1_000_000) return { tier: 'T1', score: 1_000 };
+    if (pl_total > 801_000) return { tier: 'T2', score: 900 };
+    if (pl_total > 501_000) return { tier: 'T3', score: 600 };
+    if (pl_total > 301_000) return { tier: 'T4', score: 500 };
+    if (pl_total > 101_000) return { tier: 'T5', score: 400 };
+    if (pl_total > 51_000) return { tier: 'T6', score: 300 };
+    if (pl_total > 1_000) return { tier: 'T7', score: 200 };
+    return { tier: 'T8', score: 100 };
+  }
+
   private fields(): string[] {
     return [
       'nr_conta',
       'nome_completo',
       'email',
       'documento_cpf_cnpj',
+      'tier',
+      'score',
       'dt_nascimento',
       'idade',
       'tipo_cliente',
@@ -394,3 +419,30 @@ export class AccountsMarketingConsumer extends WorkerHost {
     ];
   }
 }
+
+// {
+//   "_id": {
+//     "$oid": "68c97d38966fe75a3fe590e3"
+//   },
+//   "sender": {
+//     "id": "689360d4a933b2b5ac098333",
+//     "name": "Dev",
+//     "api_key": "b2d4ec7e-16bd-483a-882f-bc904970e699",
+//     "webhook_url": "https://webhook.site/2594e809-ea67-4b98-8cae-9cb9014712f4",
+//     "_id": {
+//       "$oid": "68c97d38966fe75a3fe590e4"
+//     }
+//   },
+//   "type": "accounts_marketing",
+//   "status": "completed",
+//   "reference_date": "2025-09-16",
+//   "createdAt": {
+//     "$date": "2025-09-16T15:07:36.028Z"
+//   },
+//   "updatedAt": {
+//     "$date": "2025-09-16T15:10:06.428Z"
+//   },
+//   "__v": 0,
+//   "signed_url": "https://storage.googleapis.com/galaxyerp/b2d4ec7e-16bd-483a-882f-bc904970e699/2025-09-16/clients_marketing.csv.zip?GoogleAccessId=locness%40methodical-bank-248219.iam.gserviceaccount.com&Expires=1758036304&Signature=aQPh3xfhZd6eWPRVJZ8zkp7xKxYt67YJfLwh9jm%2FMBcx%2B21pGA9JBPqqIBM%2B0%2BKKILZBuXBQ0f2K5yWPhNpXOyHHjdnPjqBpTtqMkzu3WDDOAFwzSxoO%2Bp2%2B2FYltK4yka327rTE7VyzOoLQaUcPd9q%2F3fJa3ZPwP2cHTd3GpWVwPSf0iGWDnGV9Re%2FI8Nw04AKeTDSa8kDN%2Ffm0v0x%2FpUI3JHl38EBWi9vqq9aJpOm6hpnCrBINQuyAxWrF0CCCe9bbIIP%2FjRvVpFOMy6c9tv2cI3sPUPnGT3gw%2BaO%2BfSJSEac0jDrWR1dun%2BZi9H9D630c%2BMORjLttNK4Z3oJ8iA%3D%3D",
+//   "upload_url": "https://storage.googleapis.com/galaxyerp/b2d4ec7e-16bd-483a-882f-bc904970e699/2025-09-16/clients_marketing.csv.zip"
+// }

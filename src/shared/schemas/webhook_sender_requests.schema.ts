@@ -41,6 +41,9 @@ export class WebhookSenderRequests extends Document {
   @Prop()
   error_api: string;
 
+  @Prop()
+  internal_error: string;
+
   @Prop({ type: Date, default: Date.now })
   createdAt: Date;
 

@@ -60,7 +60,7 @@ export class WebhookRequestController {
     | rendimento_anual | number | Rendimento anual |
     | pl_declarado | number | Patrimônio declarado pelo cliente. |
     | genero | string | Gênero informado. |
-    | suitability | string | Resultado do questionário de suitability. |
+    | suitability | string | Suitability. |
     | termo_consentimento | string | Status do termo de consentimento do banking. |
     | cartao | string | Cartão contratado. |
     | saldo_banking | string | Saldo disponível no banking. |

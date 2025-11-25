@@ -74,6 +74,6 @@ import { ResponseHandlerService, StorageUploadUtilsService } from './service';
     }),
   ],
   providers: [ResponseHandlerService, StorageUploadUtilsService],
-  exports: [ConfigModule, ResponseHandlerService],
+  exports: [ConfigModule, ResponseHandlerService, StorageUploadUtilsService],
 })
 export class SharedModule {}

@@ -44,6 +44,9 @@ export class WebhookSenderRequests extends Document {
   @Prop()
   internal_error: string;
 
+  @Prop({ default: false })
+  is_deleted: boolean;
+
   @Prop({ type: Date, default: Date.now })
   createdAt: Date;
 
@@ -56,3 +59,4 @@ export const WebhookSenderRequestsSchema = SchemaFactory.createForClass(
 );
 
 WebhookSenderRequestsSchema.index({ reference_date: -1, 'sender.api_key': 1 });
+WebhookSenderRequestsSchema.index({ is_deleted: 1, createdAt: 1 });

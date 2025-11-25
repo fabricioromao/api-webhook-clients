@@ -33,6 +33,7 @@
     "@nestjs/mongoose": "^11.0.3",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/schedule": "^6.0.1",
     "@nestjs/swagger": "^11.2.0",
     "@scalar/nestjs-api-reference": "^0.5.12",
     "adm-zip": "^0.5.16",

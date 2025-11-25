@@ -1,8 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DocumentBuilder, getSchemaPath, SwaggerModule } from '@nestjs/swagger';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
-import { WebhookDataPayloadDto } from './shared/dto';
 
 export const swagger = (app: INestApplication) => {
   const configService = app.get(ConfigService);
@@ -62,41 +61,7 @@ Todos os endpoints (exceto geração de token) requerem autenticação via JWT B
     )
     .build();
 
-  const content = SwaggerModule.createDocument(app, config, {
-    extraModels: [WebhookDataPayloadDto],
-  });
-
-  // Criamos um "path fantasma" só para documentação do retorno do webhook
-  content.paths['/webhooks/clients-callback (documentação)'] = {
-    post: {
-      tags: ['Webhooks'],
-      summary: 'Retorno do webhook de clientes',
-      description:
-        'Este endpoint **não existe** na API. Serve apenas para documentar o **payload** que sua aplicação receberá no webhook.',
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: { $ref: getSchemaPath(WebhookDataPayloadDto) },
-            examples: {
-              exemplo: {
-                summary: 'Exemplo de payload',
-                value: {
-                  data: 'https://storage.googleapis.com/bucket/clients_marketing_2024-08-07_api123.zip?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=service%40project.iam.gserviceaccount.com%2F20240807%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20240807T140000Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=abc123...',
-                },
-              },
-            },
-          },
-        },
-      },
-      responses: {
-        200: {
-          description:
-            'Documento apenas ilustrativo do payload recebido. Sua aplicação de fato **não** responde a este path.',
-        },
-      },
-    },
-  };
+  const content = SwaggerModule.createDocument(app, config);
 
   app.use(
     '/docs',

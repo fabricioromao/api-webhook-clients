@@ -4,6 +4,8 @@ import type { Response } from 'express';
 import { ResponseHandlerService } from 'src/shared';
 import type { RequestType } from 'src/shared/types/request.types';
 import { RequestAccountsMarketingUseCase } from './use-cases/request-accounts-marketing.use-case';
+import { RequestAccountsRegistrationUseCase } from './use-cases/request-accounts-registration.use-case';
+import { RequestCreditCardSpendingUseCase } from './use-cases/request-credit-card-spending.use-case';
 
 @ApiTags('Solicitações de Webhook')
 @Controller('webhook-request')
@@ -11,11 +13,13 @@ export class WebhookRequestController {
   constructor(
     private readonly responseHandlerService: ResponseHandlerService,
     private readonly requestAccountsMarketingUseCase: RequestAccountsMarketingUseCase,
+    private readonly requestAccountsRegistrationUseCase: RequestAccountsRegistrationUseCase,
+    private readonly requestCreditCardSpendingUseCase: RequestCreditCardSpendingUseCase,
   ) {}
 
   @Get('accounts-marketing')
   @ApiOperation({
-    summary: 'Solicitar dados das contas via webhook',
+    summary: 'Marketing',
     description: [
       'Solicita os dados das contas através de um webhook e documenta o que será entregue quando o processamento for concluído.',
       '',
@@ -99,6 +103,142 @@ export class WebhookRequestController {
     return await this.responseHandlerService.handle({
       method: async () => {
         return await this.requestAccountsMarketingUseCase.execute(req);
+      },
+      res,
+      successMessage: 'Solicitação de dados enviada com sucesso.',
+    });
+  }
+
+  @Get('accounts-registration')
+  @ApiOperation({
+    summary: 'Dados cadastrais com engajamento',
+    description: [
+      'Solicita os dados cadastrais das contas através de um webhook e documenta o que será entregue quando o processamento for concluído.',
+      '',
+      '### Payload enviado ao webhook',
+      'Quando o processamento terminar, enviamos um POST para a URL cadastrada contendo um link temporário para download do arquivo:',
+      '',
+      '```json',
+      '{',
+      '  \"data\": \"https://.../clients_registration_2024-08-07_api123.zip\"',
+      '}',
+      '```',
+      '',
+      'O link expira em 15 minutos e aponta para um arquivo .zip com a planilha CSV.',
+      '',
+      '### Estrutura do arquivo CSV entregue',
+      '| Campo | Tipo | Descrição |',
+      '| --- | --- | --- |',
+      '| nr_conta | string | Número da conta do cliente. |',
+      '| nome_completo | string | Nome completo cadastrado. |',
+      '| email | string | E-mail principal. |',
+      '| documento_cpf_cnpj | string | CPF/CNPJ sem máscara. |',
+      '| tipo_cliente | string | Tipo de cliente (PF, PJ). |',
+      '| dt_nascimento | string | Data de nascimento informada pelo cliente. |',
+      '| celular | string | Celular principal. |',
+      '| profissao | string | Profissão informada. |',
+      '| estado_civil | string | Estado civil informado. |',
+      '| endereco_completo | string | Endereço completo cadastrado. |',
+      '| endereco_complemento | string | Complemento do endereço. |',
+      '| endereco_cidade | string | Cidade de residência. |',
+      '| endereco_estado | string | UF de residência. |',
+      '| endereco_cep | string | CEP de residência. |',
+      '| dt_abertura | string | Data de abertura da conta (DD/MM/YYYY). |',
+      '| dt_encerramento | string | Data de encerramento da conta (DD/MM/YYYY). |',
+      '| dt_vinculo | string | Data de vínculo com a corretora (DD/MM/YYYY). |',
+      '| dt_primeiro_investimento | string | Data do primeiro investimento (DD/MM/YYYY). |',
+      '| dt_ultimo_investimento | string | Data do último investimento (DD/MM/YYYY). |',
+      '| status | string | Status da conta. |',
+      '| genero | string | Gênero informado. |',
+      '| perfil_investidor | string | Perfil de investidor. |',
+      '| tipo_investidor | string | Tipo de investidor. |',
+      '| suitability | string | Perfil de suitability. |',
+      '| faixa_cliente | string | Segmento/faixa do cliente (ex.: Até 50K). |',
+      '| nm_assessor | string | Nome do assessor vinculado. |',
+      '| cge_code | number | Código do assessor (mesmo valor de cge_officer). |',
+      '| cge_officer | number | Código do assessor (cge_officer). |',
+      '| nivel_engajamento | string | Nível de engajamento (customer_engagement). |',
+      '| explicacao_engajamento | string | Explicação do nível de engajamento. |',
+      '',
+      '> Campos podem ser nulos ou vazios quando não houver informação disponível.',
+    ].join('\n'),
+  })
+  @ApiHeader({
+    name: 'Authorization',
+    description: 'Bearer token para autenticação',
+    required: true,
+    schema: { type: 'string' },
+  })
+  async requestAccountsRegistration(@Res() res: Response, @Req() req: RequestType) {
+    return await this.responseHandlerService.handle({
+      method: async () => {
+        return await this.requestAccountsRegistrationUseCase.execute(req);
+      },
+      res,
+      successMessage: 'Solicitação de dados enviada com sucesso.',
+    });
+  }
+
+  @Get('credit-card-spending')
+  @ApiOperation({
+    summary: 'Cartão de crédito',
+    description: [
+      'Solicita os gastos de cartão de crédito por conta e envia o JSON diretamente para o webhook cadastrado.',
+      '',
+      '### Payload enviado ao webhook',
+      'Quando o processamento terminar, enviamos um POST para a URL cadastrada com o JSON abaixo:',
+      '',
+      '```json',
+      '{',
+      '  \"data\": [',
+      '    {',
+      '      \"nr_conta\": \"003838135\",',
+      '      \"nome_completo\": \"HELIO DE SOUSA PERES\",',
+      '      \"credit_card_spending_history\": [',
+      '        {',
+      '          \"year\": \"2024\",',
+      '          \"items\": [',
+      '            {',
+      '              \"reference_month\": \"2024-01\",',
+      '              \"reference_month_formatted\": \"Jan/24\",',
+      '              \"gasto_cartao_centavos\": 123456,',
+      '              \"gasto_cartao_formatado\": \"R$ 1.234,56\"',
+      '            }',
+      '          ]',
+      '        }',
+      '      ]',
+      '    }',
+      '  ]',
+      '}',
+      '```',
+      '',
+      '### Estrutura do JSON entregue',
+      '| Campo | Tipo | Descrição |',
+      '| --- | --- | --- |',
+      '| data | array | Lista de contas com histórico de gastos. |',
+      '| data[].nr_conta | string | Número da conta do cliente. |',
+      '| data[].nome_completo | string | Nome completo cadastrado. |',
+      '| data[].credit_card_spending_history | array | Histórico agrupado por ano. |',
+      '| data[].credit_card_spending_history[].year | string | Ano de referência (YYYY). |',
+      '| data[].credit_card_spending_history[].items | array | Lista de gastos por mês. |',
+      '| data[].credit_card_spending_history[].items[].reference_month | string | Mês de referência (YYYY-MM). |',
+      '| data[].credit_card_spending_history[].items[].reference_month_formatted | string | Mês formatado (ex.: Jan/24). |',
+      '| data[].credit_card_spending_history[].items[].gasto_cartao_centavos | number | Valor em centavos. |',
+      '| data[].credit_card_spending_history[].items[].gasto_cartao_formatado | string | Valor formatado em moeda. |',
+      '',
+      '> Contas sem histórico de gasto retornam o array credit_card_spending_history vazio.',
+    ].join('\n'),
+  })
+  @ApiHeader({
+    name: 'Authorization',
+    description: 'Bearer token para autenticação',
+    required: true,
+    schema: { type: 'string' },
+  })
+  async requestCreditCardSpending(@Res() res: Response, @Req() req: RequestType) {
+    return await this.responseHandlerService.handle({
+      method: async () => {
+        return await this.requestCreditCardSpendingUseCase.execute(req);
       },
       res,
       successMessage: 'Solicitação de dados enviada com sucesso.',

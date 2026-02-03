@@ -1,8 +1,14 @@
 import { Module } from '@nestjs/common';
 import { AccountsMarketingModule } from './modules/accounts-marketing/accounts-marketing.module';
+import { AccountsRegistrationModule } from './modules/accounts-registration/accounts-registration.module';
+import { CreditCardSpendingModule } from './modules/credit-card-spending/credit-card-spending.module';
 
 @Module({
-  imports: [AccountsMarketingModule],
+  imports: [
+    AccountsMarketingModule,
+    AccountsRegistrationModule,
+    CreditCardSpendingModule,
+  ],
   controllers: [],
   providers: [],
 })

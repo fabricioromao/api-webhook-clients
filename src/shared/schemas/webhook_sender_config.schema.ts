@@ -14,7 +14,7 @@ export class WebhookSenderConfig extends Document {
   @Prop({ required: true })
   api_key: string;
 
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   webhook_url: string;
 
   @Prop()

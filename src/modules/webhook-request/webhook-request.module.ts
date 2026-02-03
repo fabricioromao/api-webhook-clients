@@ -11,6 +11,7 @@ import {
 import { RequestAccountsMarketingUseCase } from './use-cases/request-accounts-marketing.use-case';
 import { RequestAccountsRegistrationUseCase } from './use-cases/request-accounts-registration.use-case';
 import { RequestCreditCardSpendingUseCase } from './use-cases/request-credit-card-spending.use-case';
+import { RequestAccountsAssetsUseCase } from './use-cases/request-accounts-assets.use-case';
 import { WebhookRequestController } from './webhook-request.controller';
 
 @Module({
@@ -27,6 +28,9 @@ import { WebhookRequestController } from './webhook-request.controller';
     BullModule.registerQueue({
       name: QueuesEnum.CREDIT_CARD_SPENDING,
     }),
+    BullModule.registerQueue({
+      name: QueuesEnum.ACCOUNTS_ASSETS,
+    }),
     BullBoardModule.forFeature({
       name: QueuesEnum.ACCOUNTS_MARKETING,
       adapter: BullMQAdapter,
@@ -39,12 +43,17 @@ import { WebhookRequestController } from './webhook-request.controller';
       name: QueuesEnum.CREDIT_CARD_SPENDING,
       adapter: BullMQAdapter,
     }),
+    BullBoardModule.forFeature({
+      name: QueuesEnum.ACCOUNTS_ASSETS,
+      adapter: BullMQAdapter,
+    }),
   ],
   controllers: [WebhookRequestController],
   providers: [
     RequestAccountsMarketingUseCase,
     RequestAccountsRegistrationUseCase,
     RequestCreditCardSpendingUseCase,
+    RequestAccountsAssetsUseCase,
   ],
 })
 export class WebhookRequestModule {}

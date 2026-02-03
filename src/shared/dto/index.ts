@@ -7,3 +7,4 @@ export * from './webhook-request-response.dto';
 export * from './queues/accounts-marketing.dto';
 export * from './queues/accounts-registration.dto';
 export * from './queues/credit-card-spending.dto';
+export * from './queues/accounts-assets.dto';

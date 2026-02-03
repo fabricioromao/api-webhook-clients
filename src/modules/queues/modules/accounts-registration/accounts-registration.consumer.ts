@@ -51,11 +51,23 @@ export class AccountsRegistrationConsumer extends WorkerHost {
         throw new Error('Webhook URL não fornecida');
       }
 
-      const currentRequest = await this.webhookSenderRequestsModel
-        .findById(id)
-        .select('status')
-        .lean()
-        .exec();
+      const [existingRequest, currentRequest] = await Promise.all([
+        this.webhookSenderRequestsModel
+          .findOne({
+            'sender.api_key': apiKey,
+            reference_date: referenceDate,
+            status: WebhookSenderRequestStatus.COMPLETED,
+          })
+          .sort({ createdAt: -1 })
+          .select('status upload_url')
+          .lean()
+          .exec(),
+        this.webhookSenderRequestsModel
+          .findById(id)
+          .select('status')
+          .lean()
+          .exec(),
+      ]);
 
       if (!currentRequest) {
         throw new Error('Solicitação não encontrada com o ID: ' + id);
@@ -65,6 +77,27 @@ export class AccountsRegistrationConsumer extends WorkerHost {
         throw new Error(
           'Solicitação já processada. Status atual: ' + currentRequest.status,
         );
+      }
+
+      if (existingRequest) {
+        const signedUrl =
+          await this.storageUploadUtilsService.signedUrlWithExpiration(
+            this.storageUploadUtilsService.getRelativeFilePath(
+              existingRequest.upload_url!,
+            ),
+          );
+
+        await this.updateRequest({
+          id,
+          upload_url: existingRequest.upload_url,
+          signed_url: signedUrl,
+        });
+
+        return await this.sendToSenderWebhook({
+          requestId: id,
+          webhook_url: webhookUrl!,
+          signed_url: signedUrl,
+        });
       }
 
       const zipFile = await this.generateCsvFromCollections();

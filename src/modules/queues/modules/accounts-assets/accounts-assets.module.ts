@@ -4,27 +4,24 @@ import { MongooseModule } from '@nestjs/mongoose';
 import {
   Accounts,
   AccountsSchema,
-  CreditCardSpendingHistory,
-  CreditCardSpendingHistorySchema,
+  PositionsByAccount,
+  PositionsByAccountSchema,
   StorageUploadUtilsService,
   WebhookSenderRequests,
   WebhookSenderRequestsSchema,
 } from 'src/shared';
-import { CreditCardSpendingConsumer } from './credit-card-spending.consumer';
+import { AccountsAssetsConsumer } from './accounts-assets.consumer';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: WebhookSenderRequests.name, schema: WebhookSenderRequestsSchema },
       { name: Accounts.name, schema: AccountsSchema },
-      {
-        name: CreditCardSpendingHistory.name,
-        schema: CreditCardSpendingHistorySchema,
-      },
+      { name: PositionsByAccount.name, schema: PositionsByAccountSchema },
     ]),
     HttpModule,
   ],
   controllers: [],
-  providers: [CreditCardSpendingConsumer, StorageUploadUtilsService],
+  providers: [AccountsAssetsConsumer, StorageUploadUtilsService],
 })
-export class CreditCardSpendingModule {}
+export class AccountsAssetsModule {}

@@ -44,6 +44,9 @@ export class WebhookSenderRequests extends Document {
   @Prop()
   internal_error: string;
 
+  @Prop({ type: Object })
+  request_params: Record<string, any>;
+
   @Prop({ default: false })
   is_deleted: boolean;
 

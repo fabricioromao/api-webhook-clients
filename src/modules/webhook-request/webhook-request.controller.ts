@@ -1,11 +1,12 @@
-import { Controller, Get, Req, Res } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Controller, Get, Query, Req, Res } from '@nestjs/common';
+import { ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ResponseHandlerService } from 'src/shared';
 import type { RequestType } from 'src/shared/types/request.types';
 import { RequestAccountsMarketingUseCase } from './use-cases/request-accounts-marketing.use-case';
 import { RequestAccountsRegistrationUseCase } from './use-cases/request-accounts-registration.use-case';
 import { RequestCreditCardSpendingUseCase } from './use-cases/request-credit-card-spending.use-case';
+import { RequestAccountsAssetsUseCase } from './use-cases/request-accounts-assets.use-case';
 
 @ApiTags('Solicitações de Webhook')
 @Controller('webhook-request')
@@ -15,6 +16,7 @@ export class WebhookRequestController {
     private readonly requestAccountsMarketingUseCase: RequestAccountsMarketingUseCase,
     private readonly requestAccountsRegistrationUseCase: RequestAccountsRegistrationUseCase,
     private readonly requestCreditCardSpendingUseCase: RequestCreditCardSpendingUseCase,
+    private readonly requestAccountsAssetsUseCase: RequestAccountsAssetsUseCase,
   ) {}
 
   @Get('accounts-marketing')
@@ -183,48 +185,32 @@ export class WebhookRequestController {
   @ApiOperation({
     summary: 'Cartão de crédito',
     description: [
-      'Solicita os gastos de cartão de crédito por conta e envia o JSON diretamente para o webhook cadastrado.',
+      'Solicita os gastos de cartão de crédito por conta e envia um link para download do JSON em arquivo .zip.',
       '',
       '### Payload enviado ao webhook',
-      'Quando o processamento terminar, enviamos um POST para a URL cadastrada com o JSON abaixo:',
+      'Quando o processamento terminar, enviamos um POST para a URL cadastrada contendo um link temporário para download do arquivo:',
       '',
       '```json',
       '{',
-      '  \"data\": [',
-      '    {',
-      '      \"nr_conta\": \"003838135\",',
-      '      \"nome_completo\": \"HELIO DE SOUSA PERES\",',
-      '      \"credit_card_spending_history\": [',
-      '        {',
-      '          \"year\": \"2024\",',
-      '          \"items\": [',
-      '            {',
-      '              \"reference_month\": \"2024-01\",',
-      '              \"reference_month_formatted\": \"Jan/24\",',
-      '              \"gasto_cartao_centavos\": 123456,',
-      '              \"gasto_cartao_formatado\": \"R$ 1.234,56\"',
-      '            }',
-      '          ]',
-      '        }',
-      '      ]',
-      '    }',
-      '  ]',
+      '  \"data\": \"https://.../credit_card_spending.json.zip\"',
       '}',
       '```',
+      '',
+      'O link expira em 15 minutos e aponta para um arquivo .zip com um único arquivo JSON.',
       '',
       '### Estrutura do JSON entregue',
       '| Campo | Tipo | Descrição |',
       '| --- | --- | --- |',
-      '| data | array | Lista de contas com histórico de gastos. |',
-      '| data[].nr_conta | string | Número da conta do cliente. |',
-      '| data[].nome_completo | string | Nome completo cadastrado. |',
-      '| data[].credit_card_spending_history | array | Histórico agrupado por ano. |',
-      '| data[].credit_card_spending_history[].year | string | Ano de referência (YYYY). |',
-      '| data[].credit_card_spending_history[].items | array | Lista de gastos por mês. |',
-      '| data[].credit_card_spending_history[].items[].reference_month | string | Mês de referência (YYYY-MM). |',
-      '| data[].credit_card_spending_history[].items[].reference_month_formatted | string | Mês formatado (ex.: Jan/24). |',
-      '| data[].credit_card_spending_history[].items[].gasto_cartao_centavos | number | Valor em centavos. |',
-      '| data[].credit_card_spending_history[].items[].gasto_cartao_formatado | string | Valor formatado em moeda. |',
+      '| (root) | array | Lista de contas com histórico de gastos. |',
+      '| (root)[].nr_conta | string | Número da conta do cliente. |',
+      '| (root)[].nome_completo | string | Nome completo cadastrado. |',
+      '| (root)[].credit_card_spending_history | array | Histórico agrupado por ano. |',
+      '| (root)[].credit_card_spending_history[].year | string | Ano de referência (YYYY). |',
+      '| (root)[].credit_card_spending_history[].items | array | Lista de gastos por mês. |',
+      '| (root)[].credit_card_spending_history[].items[].reference_month | string | Mês de referência (YYYY-MM). |',
+      '| (root)[].credit_card_spending_history[].items[].reference_month_formatted | string | Mês formatado (ex.: Jan/24). |',
+      '| (root)[].credit_card_spending_history[].items[].gasto_cartao_centavos | number | Valor em centavos. |',
+      '| (root)[].credit_card_spending_history[].items[].gasto_cartao_formatado | string | Valor formatado em moeda. |',
       '',
       '> Contas sem histórico de gasto retornam o array credit_card_spending_history vazio.',
     ].join('\n'),
@@ -243,5 +229,118 @@ export class WebhookRequestController {
       res,
       successMessage: 'Solicitação de dados enviada com sucesso.',
     });
+  }
+
+  @Get('accounts-assets')
+  @ApiOperation({
+    summary: 'Contas por ativo',
+    description: [
+      'Solicita os ativos das contas e envia um link para download do JSON em arquivo .zip.',
+      '',
+      '### Parâmetros opcionais',
+      '- `assets`: permite filtrar quais ativos serão retornados. Aceita múltiplos valores.',
+      '',
+      'Valores aceitos:',
+      '- `all` (padrão)',
+      '- `fundos`',
+      '- `renda_fixa`',
+      '- `previdencia`',
+      '- `renda_variavel`',
+      '- `cripto`',
+      '- `valores_em_transito`',
+      '',
+      'Exemplos:',
+      '- `/webhook-request/accounts-assets?assets=fundos&assets=renda_fixa`',
+      '- `/webhook-request/accounts-assets?assets=renda_variavel,cripto`',
+      '',
+      '### Payload enviado ao webhook',
+      'Quando o processamento terminar, enviamos um POST para a URL cadastrada contendo um link temporário para download do arquivo:',
+      '',
+      '```json',
+      '{',
+      '  \"data\": \"https://.../accounts_assets.json.zip\"',
+      '}',
+      '```',
+      '',
+      'O link expira em 15 minutos e aponta para um arquivo .zip com um único arquivo JSON.',
+      '',
+      '### Estrutura do JSON entregue',
+      '| Campo | Tipo | Descrição |',
+      '| --- | --- | --- |',
+      '| (root) | array | Lista de contas com ativos. |',
+      '| (root)[].nr_conta | string | Número da conta do cliente. |',
+      '| (root)[].nome_completo | string | Nome completo cadastrado. |',
+      '| (root)[].ativos | object | Ativos do cliente, formatados como no get-customer-by-id. |',
+      '| (root)[].ativos.investment_fund | array | Fundos (quando solicitado). |',
+      '| (root)[].ativos.fixed_income | array | Renda fixa (quando solicitado). |',
+      '| (root)[].ativos.pension_informations | array | Previdência (quando solicitado). |',
+      '| (root)[].ativos.pending_settlements | object | Valores em trânsito (quando solicitado). |',
+      '| (root)[].ativos.stock_positions | array | Renda variável (quando solicitado). |',
+      '| (root)[].ativos.equities_derivatives | array | Derivativos de renda variável (quando solicitado). |',
+      '| (root)[].ativos.crypto_coin | array | Criptoativos (quando solicitado). |',
+      '| (root)[].ativos.cash | array | Caixa/cash (somente em `all`). |',
+      '| (root)[].ativos.summary_accounts | array | Resumo por mercado (somente em `all`). |',
+      '',
+      '> Campos não solicitados não serão retornados.',
+    ].join('\n'),
+  })
+  @ApiQuery({
+    name: 'assets',
+    required: false,
+    isArray: true,
+    description:
+      'Filtro de ativos. Aceita múltiplos valores: all, fundos, renda_fixa, previdencia, renda_variavel, cripto, valores_em_transito.',
+  })
+  @ApiHeader({
+    name: 'Authorization',
+    description: 'Bearer token para autenticação',
+    required: true,
+    schema: { type: 'string' },
+  })
+  async requestAccountsAssets(
+    @Res() res: Response,
+    @Req() req: RequestType,
+    @Query('assets') assets?: string | string[],
+  ) {
+    const normalizedAssets = this.normalizeAssetsQuery(assets);
+
+    return await this.responseHandlerService.handle({
+      method: async () => {
+        return await this.requestAccountsAssetsUseCase.execute(
+          req,
+          normalizedAssets,
+        );
+      },
+      res,
+      successMessage: 'Solicitação de dados enviada com sucesso.',
+    });
+  }
+
+  private normalizeAssetsQuery(assets?: string | string[]) {
+    if (!assets) return undefined;
+    const raw = Array.isArray(assets) ? assets : [assets];
+    const normalized = raw
+      .flatMap((value) => String(value).split(','))
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+
+    const allowed = new Set([
+      'all',
+      'fundos',
+      'renda_fixa',
+      'previdencia',
+      'renda_variavel',
+      'cripto',
+      'valores_em_transito',
+    ]);
+
+    const invalid = normalized.filter((value) => !allowed.has(value));
+    if (invalid.length) {
+      throw new BadRequestException(
+        `Tipos de ativos inválidos: ${invalid.join(', ')}`,
+      );
+    }
+
+    return normalized.length ? normalized : undefined;
   }
 }

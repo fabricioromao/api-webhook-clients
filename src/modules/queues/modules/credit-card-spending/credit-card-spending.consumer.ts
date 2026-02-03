@@ -3,13 +3,16 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Job } from 'bullmq';
+import * as fs from 'fs/promises';
 import { Model } from 'mongoose';
+import { join } from 'path';
 import { lastValueFrom } from 'rxjs';
 
 import {
   Accounts,
   CreditCardSpendingHistory,
   QueuesEnum,
+  StorageUploadUtilsService,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
 } from 'src/shared';
@@ -18,6 +21,7 @@ import { CreditCardSpendingDto } from 'src/shared/dto';
 @Processor(QueuesEnum.CREDIT_CARD_SPENDING)
 export class CreditCardSpendingConsumer extends WorkerHost {
   private logger = new Logger(CreditCardSpendingConsumer.name);
+  private filePath = join(process.cwd(), 'credit_card_spending.json');
 
   constructor(
     @InjectModel(WebhookSenderRequests.name)
@@ -27,6 +31,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
     @InjectModel(CreditCardSpendingHistory.name)
     private creditCardSpendingHistoryModel: Model<CreditCardSpendingHistory>,
 
+    private readonly storageUploadUtilsService: StorageUploadUtilsService,
     private readonly http: HttpService,
   ) {
     super();
@@ -34,7 +39,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
 
   async process(job: Job<CreditCardSpendingDto>) {
     try {
-      const { id, webhookUrl } = job.data;
+      const { id, apiKey, referenceDate, webhookUrl } = job.data;
 
       this.logger.debug(`Processando solicitação: ${id}`);
 
@@ -42,11 +47,23 @@ export class CreditCardSpendingConsumer extends WorkerHost {
         throw new Error('Webhook URL não fornecida');
       }
 
-      const currentRequest = await this.webhookSenderRequestsModel
-        .findById(id)
-        .select('status')
-        .lean()
-        .exec();
+      const [existingRequest, currentRequest] = await Promise.all([
+        this.webhookSenderRequestsModel
+          .findOne({
+            'sender.api_key': apiKey,
+            reference_date: referenceDate,
+            status: WebhookSenderRequestStatus.COMPLETED,
+          })
+          .sort({ createdAt: -1 })
+          .select('status upload_url')
+          .lean()
+          .exec(),
+        this.webhookSenderRequestsModel
+          .findById(id)
+          .select('status')
+          .lean()
+          .exec(),
+      ]);
 
       if (!currentRequest) {
         throw new Error('Solicitação não encontrada com o ID: ' + id);
@@ -58,12 +75,53 @@ export class CreditCardSpendingConsumer extends WorkerHost {
         );
       }
 
+      if (existingRequest) {
+        const signedUrl =
+          await this.storageUploadUtilsService.signedUrlWithExpiration(
+            this.storageUploadUtilsService.getRelativeFilePath(
+              existingRequest.upload_url!,
+            ),
+          );
+
+        await this.updateRequest({
+          id,
+          upload_url: existingRequest.upload_url,
+          signed_url: signedUrl,
+        });
+
+        return await this.sendToSenderWebhook({
+          requestId: id,
+          webhook_url: webhookUrl!,
+          signed_url: signedUrl,
+        });
+      }
+
       const payload = await this.buildPayload();
+      const zipFile = await this.generateZipFromPayload(payload);
+
+      const uploadUrl = await this.storageUploadUtilsService.uploadToStorage({
+        apiKey,
+        filePath: zipFile,
+        referenceDate,
+      });
+
+      const signedUrl =
+        await this.storageUploadUtilsService.signedUrlWithExpiration(
+          this.storageUploadUtilsService.getRelativeFilePath(uploadUrl),
+        );
+
+      await fs.unlink(zipFile);
+
+      await this.updateRequest({
+        id,
+        upload_url: uploadUrl,
+        signed_url: signedUrl,
+      });
 
       await this.sendToSenderWebhook({
         requestId: id,
         webhook_url: webhookUrl!,
-        payload,
+        signed_url: signedUrl,
       });
     } catch (error) {
       this.logger.error(
@@ -122,6 +180,8 @@ export class CreditCardSpendingConsumer extends WorkerHost {
   private async updateRequest(body: {
     id: string;
     status?: WebhookSenderRequestStatus;
+    upload_url?: string;
+    signed_url?: string;
     error_api?: string;
     internal_error?: string;
   }) {
@@ -139,27 +199,15 @@ export class CreditCardSpendingConsumer extends WorkerHost {
   private async sendToSenderWebhook(data: {
     requestId: string;
     webhook_url: string;
-    payload: Array<{
-      nr_conta: string;
-      nome_completo: string;
-      credit_card_spending_history: Array<{
-        year: string;
-        items: Array<{
-          reference_month?: string;
-          gasto_cartao_centavos?: number;
-          gasto_cartao_formatado?: string;
-          reference_month_formatted?: string | null;
-        }>;
-      }>;
-    }>;
+    signed_url: string;
   }) {
-    const { webhook_url, payload, requestId } = data;
+    const { webhook_url, signed_url, requestId } = data;
 
     try {
       await lastValueFrom(
         this.http.post(
           webhook_url,
-          { data: payload },
+          { data: signed_url },
           {
             validateStatus: (status) => status === 200 || status === 201,
           },
@@ -169,6 +217,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
       await this.updateRequest({
         id: requestId,
         status: WebhookSenderRequestStatus.COMPLETED,
+        signed_url,
       });
 
       this.logger.debug(
@@ -181,6 +230,15 @@ export class CreditCardSpendingConsumer extends WorkerHost {
         error_api: error.message,
       });
     }
+  }
+
+  private async generateZipFromPayload(payload: unknown) {
+    const jsonPayload = JSON.stringify(payload);
+    await fs.writeFile(this.filePath, jsonPayload);
+
+    const zipFile = await this.storageUploadUtilsService.zipFile(this.filePath);
+    await fs.unlink(this.filePath);
+    return zipFile;
   }
 
   private formatReferenceMonth(value?: string): string | null {

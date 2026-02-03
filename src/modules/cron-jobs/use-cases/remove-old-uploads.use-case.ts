@@ -45,9 +45,8 @@ export class RemoveOldUploadsUseCase implements OnModuleInit {
 
     for (const request of requests) {
       try {
-        const uploadPath = request.upload_url?.replace(
-          'https://storage.googleapis.com/galaxyerp/',
-          '',
+        const uploadPath = this.storageUploadUtilsService.getRelativeFilePath(
+          request.upload_url!,
         );
 
         const deleteResponse =

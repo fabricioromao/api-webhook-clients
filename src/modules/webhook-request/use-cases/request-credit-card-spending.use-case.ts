@@ -70,6 +70,7 @@ export class RequestCreditCardSpendingUseCase {
       type: WebhookSenderRequestType.CREDIT_CARD_SPENDING,
       status: WebhookSenderRequestStatus.PENDING,
       reference_date,
+      request_params: { module_type: WebhookModuleType.CREDIT_CARD_SPENDING },
     });
 
     const savedRequest = await newRequest.save();

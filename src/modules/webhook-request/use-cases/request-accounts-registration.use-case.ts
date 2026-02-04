@@ -70,6 +70,7 @@ export class RequestAccountsRegistrationUseCase {
       type: WebhookSenderRequestType.ACCOUNTS_REGISTRATION,
       status: WebhookSenderRequestStatus.PENDING,
       reference_date,
+      request_params: { module_type: WebhookModuleType.CLIENT_REGISTRATION },
     });
 
     const savedRequest = await newRequest.save();

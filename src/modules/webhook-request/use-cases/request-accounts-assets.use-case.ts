@@ -74,7 +74,10 @@ export class RequestAccountsAssetsUseCase {
       type: WebhookSenderRequestType.ACCOUNTS_ASSETS,
       status: WebhookSenderRequestStatus.PENDING,
       reference_date,
-      request_params: { asset_types: normalizedTypes },
+      request_params: {
+        module_type: WebhookModuleType.ACCOUNT_ASSETS,
+        asset_types: normalizedTypes,
+      },
     });
 
     const savedRequest = await newRequest.save();

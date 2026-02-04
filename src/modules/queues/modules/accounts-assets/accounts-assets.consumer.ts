@@ -78,6 +78,7 @@ export class AccountsAssetsConsumer extends WorkerHost {
           .findOne({
             'sender.api_key': apiKey,
             reference_date: referenceDate,
+            'request_params.module_type': WebhookModuleType.ACCOUNT_ASSETS,
             'request_params.asset_types': normalizedTypes,
             status: WebhookSenderRequestStatus.COMPLETED,
           })

@@ -60,6 +60,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
           .findOne({
             'sender.api_key': apiKey,
             reference_date: referenceDate,
+            'request_params.module_type': WebhookModuleType.CLIENT_MARKETING,
             status: WebhookSenderRequestStatus.COMPLETED,
           })
           .sort({ createdAt: -1 })

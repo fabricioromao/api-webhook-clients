@@ -70,6 +70,7 @@ export class RequestAccountsMarketingUseCase {
       type: WebhookSenderRequestType.ACCOUNTS_MARKETING,
       status: WebhookSenderRequestStatus.PENDING,
       reference_date,
+      request_params: { module_type: WebhookModuleType.CLIENT_MARKETING },
     });
 
     const savedRequest = await newRequest.save();

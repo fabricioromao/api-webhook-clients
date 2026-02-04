@@ -57,6 +57,7 @@ export class AccountsRegistrationConsumer extends WorkerHost {
           .findOne({
             'sender.api_key': apiKey,
             reference_date: referenceDate,
+            'request_params.module_type': WebhookModuleType.CLIENT_REGISTRATION,
             status: WebhookSenderRequestStatus.COMPLETED,
           })
           .sort({ createdAt: -1 })

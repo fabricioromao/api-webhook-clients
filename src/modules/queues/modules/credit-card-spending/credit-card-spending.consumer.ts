@@ -181,6 +181,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
   private async updateRequest(body: {
     id: string;
     status?: WebhookSenderRequestStatus;
+    webhook_url_sent?: string;
     upload_url?: string;
     signed_url?: string;
     error_api?: string;
@@ -219,6 +220,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
         id: requestId,
         status: WebhookSenderRequestStatus.COMPLETED,
         signed_url,
+        webhook_url_sent: webhook_url,
       });
 
       this.logger.debug(
@@ -229,6 +231,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
         id: requestId,
         status: WebhookSenderRequestStatus.FAILED,
         error_api: error.message,
+        webhook_url_sent: webhook_url,
       });
     }
   }

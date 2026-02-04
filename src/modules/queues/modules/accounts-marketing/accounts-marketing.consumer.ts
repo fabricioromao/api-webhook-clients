@@ -292,6 +292,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
     status?: WebhookSenderRequestStatus;
     upload_url?: string;
     signed_url?: string;
+    webhook_url_sent?: string;
     error_api?: string;
     internal_error?: string;
   }) {
@@ -328,6 +329,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
         id: requestId,
         status: WebhookSenderRequestStatus.COMPLETED,
         signed_url,
+        webhook_url_sent: webhook_url,
       });
 
       this.logger.debug(
@@ -338,6 +340,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
         id: requestId,
         status: WebhookSenderRequestStatus.FAILED,
         error_api: error.message,
+        webhook_url_sent: webhook_url,
       });
     }
   }

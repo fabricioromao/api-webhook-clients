@@ -1,17 +1,22 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
 import { Model } from 'mongoose';
 import {
   QueuesEnum,
+  WebhookModuleType,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
   WebhookSenderRequestType,
 } from 'src/shared';
 import { AccountsMarketingDto } from 'src/shared/dto';
 import { RequestType } from 'src/shared/types/request.types';
-import { formatDate } from 'src/shared/utils';
+import { formatDate, resolveWebhookUrl } from 'src/shared/utils';
 
 @Injectable()
 export class RequestAccountsMarketingUseCase {
@@ -25,6 +30,16 @@ export class RequestAccountsMarketingUseCase {
 
   async execute(req: RequestType) {
     const { sender } = req;
+
+    const webhookUrl = resolveWebhookUrl(
+      sender,
+      WebhookModuleType.CLIENT_MARKETING,
+    );
+    if (!webhookUrl) {
+      throw new BadRequestException(
+        'Webhook URL não configurada para client_marketing.',
+      );
+    }
 
     const reference_date = formatDate(new Date(), 'yyyy-MM-dd');
 
@@ -50,7 +65,7 @@ export class RequestAccountsMarketingUseCase {
         id: sender.id,
         name: sender.name,
         api_key: sender.api_key,
-        webhook_url: sender?.webhook_url || '',
+        webhook_url: webhookUrl,
       },
       type: WebhookSenderRequestType.ACCOUNTS_MARKETING,
       status: WebhookSenderRequestStatus.PENDING,
@@ -69,7 +84,7 @@ export class RequestAccountsMarketingUseCase {
         id: savedRequest._id as string,
         apiKey: sender.api_key,
         referenceDate: reference_date,
-        webhookUrl: sender?.webhook_url || '',
+        webhookUrl,
       }),
     );
 

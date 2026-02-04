@@ -16,6 +16,7 @@ import {
   OpenFinance,
   QueuesEnum,
   StorageUploadUtilsService,
+  WebhookModuleType,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
 } from 'src/shared';
@@ -213,15 +214,15 @@ export class AccountsMarketingConsumer extends WorkerHost {
         dt_primeiro_investimento: account.dt_primeiro_investimento
           ? formatDate(account.dt_primeiro_investimento)
           : '',
-        pl_conta_corrente: account.pl_conta_corrente,
-        pl_total: account.pl_total,
-        pl_fundos: account.pl_fundos,
-        pl_renda_fixa: account.pl_renda_fixa,
-        pl_renda_variavel: account.pl_renda_variavel,
-        pl_previdencia: account.pl_previdencia,
-        pl_derivativos: account.pl_derivativos,
-        rendimento_anual: account.vl_rendimento_anual,
-        pl_declarado: account.vl_pl_declarado,
+        pl_conta_corrente: this.toNumber(account.pl_conta_corrente),
+        pl_total: this.toNumber(account.pl_total),
+        pl_fundos: this.toNumber(account.pl_fundos),
+        pl_renda_fixa: this.toNumber(account.pl_renda_fixa),
+        pl_renda_variavel: this.toNumber(account.pl_renda_variavel),
+        pl_previdencia: this.toNumber(account.pl_previdencia),
+        pl_derivativos: this.toNumber(account.pl_derivativos),
+        rendimento_anual: this.toNumber(account.vl_rendimento_anual),
+        pl_declarado: this.toNumber(account.vl_pl_declarado),
         genero: account.genero,
         suitability: account.suitability,
         termo_consentimento: banking?.termo_consentimento || '',
@@ -233,7 +234,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
         seguro_prestamista: banking?.seguro_prestamista || '',
         portabilidade: banking?.portabilidade || '',
         value_open_finance: openFinance.reduce(
-          (acc, o) => acc + (o.vl_pl || 0),
+          (acc, o) => acc + this.toNumber(o.vl_pl),
           0,
         ),
         limite_padrao_pre_aprovado: banking?.pap_clean_cartao || '',
@@ -244,20 +245,30 @@ export class AccountsMarketingConsumer extends WorkerHost {
           ? 'Brasil'
           : 'Fora',
         ja_aportou: account.dt_primeiro_investimento ? 'Sim' : 'Não',
-        percentual_fundos: account.pl_total
-          ? ((account.pl_fundos || 0) / account.pl_total) * 100
+        percentual_fundos: this.toNumber(account.pl_total)
+          ? (this.toNumber(account.pl_fundos) /
+              this.toNumber(account.pl_total)) *
+            100
           : 0,
-        percentual_renda_fixa: account.pl_total
-          ? ((account.pl_renda_fixa || 0) / account.pl_total) * 100
+        percentual_renda_fixa: this.toNumber(account.pl_total)
+          ? (this.toNumber(account.pl_renda_fixa) /
+              this.toNumber(account.pl_total)) *
+            100
           : 0,
-        percentual_renda_variavel: account.pl_total
-          ? ((account.pl_renda_variavel || 0) / account.pl_total) * 100
+        percentual_renda_variavel: this.toNumber(account.pl_total)
+          ? (this.toNumber(account.pl_renda_variavel) /
+              this.toNumber(account.pl_total)) *
+            100
           : 0,
-        percentual_previdencia: account.pl_total
-          ? ((account.pl_previdencia || 0) / account.pl_total) * 100
+        percentual_previdencia: this.toNumber(account.pl_total)
+          ? (this.toNumber(account.pl_previdencia) /
+              this.toNumber(account.pl_total)) *
+            100
           : 0,
-        percentual_derivativos: account.pl_total
-          ? ((account.pl_derivativos || 0) / account.pl_total) * 100
+        percentual_derivativos: this.toNumber(account.pl_total)
+          ? (this.toNumber(account.pl_derivativos) /
+              this.toNumber(account.pl_total)) *
+            100
           : 0,
       };
 
@@ -306,7 +317,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
       await lastValueFrom(
         this.http.post(
           webhook_url,
-          { data: signed_url },
+          { data: signed_url, type: WebhookModuleType.CLIENT_MARKETING },
           {
             validateStatus: (status) => status === 200 || status === 201,
           },
@@ -399,6 +410,12 @@ export class AccountsMarketingConsumer extends WorkerHost {
       'percentual_previdencia',
       'percentual_derivativos',
     ];
+  }
+
+  private toNumber(value: unknown): number {
+    if (value === null || value === undefined || value === '') return 0;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   private estadosBrasil(): string[] {

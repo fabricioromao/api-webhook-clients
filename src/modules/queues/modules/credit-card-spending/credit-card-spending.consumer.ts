@@ -13,6 +13,7 @@ import {
   CreditCardSpendingHistory,
   QueuesEnum,
   StorageUploadUtilsService,
+  WebhookModuleType,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
 } from 'src/shared';
@@ -207,7 +208,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
       await lastValueFrom(
         this.http.post(
           webhook_url,
-          { data: signed_url },
+          { data: signed_url, type: WebhookModuleType.CREDIT_CARD_SPENDING },
           {
             validateStatus: (status) => status === 200 || status === 201,
           },

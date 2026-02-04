@@ -31,10 +31,30 @@ export class CreateNewSenderUseCase implements OnModuleInit {
   }
 
   async execute(body: CreateNewSenderDto) {
+    const urls = [
+      body?.webhook_urls?.account_assets,
+      body?.webhook_urls?.credit_card_spending,
+      body?.webhook_urls?.client_registration,
+      body?.webhook_urls?.client_marketing,
+      body?.webhook_url,
+    ].filter(Boolean);
+
+    if (!urls.length) {
+      throw new InternalServerErrorException(
+        'Informe ao menos uma URL de webhook.',
+      );
+    }
+
+    const urlConditions = urls.flatMap((url) => [
+      { webhook_url: url },
+      { 'webhook_urls.account_assets': url },
+      { 'webhook_urls.credit_card_spending': url },
+      { 'webhook_urls.client_registration': url },
+      { 'webhook_urls.client_marketing': url },
+    ]);
+
     const existingSender = await this.webhookSenderConfigModel
-      .findOne({
-        webhook_url: body.webhook_url,
-      })
+      .findOne({ $or: urlConditions })
       .lean()
       .exec();
 
@@ -50,6 +70,7 @@ export class CreateNewSenderUseCase implements OnModuleInit {
       name: body.name,
       api_key: apiKey,
       webhook_url: body.webhook_url,
+      webhook_urls: body.webhook_urls,
       webhook_secret: this.generetaWebhookSecret(apiKey),
       owner: body.owner,
       description: body.description,

@@ -15,6 +15,7 @@ import {
   CustomerEngagement,
   QueuesEnum,
   StorageUploadUtilsService,
+  WebhookModuleType,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
 } from 'src/shared';
@@ -247,7 +248,7 @@ export class AccountsRegistrationConsumer extends WorkerHost {
       await lastValueFrom(
         this.http.post(
           webhook_url,
-          { data: signed_url },
+          { data: signed_url, type: WebhookModuleType.CLIENT_REGISTRATION },
           {
             validateStatus: (status) => status === 200 || status === 201,
           },

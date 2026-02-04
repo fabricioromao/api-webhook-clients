@@ -14,8 +14,23 @@ export class WebhookSenderConfig extends Document {
   @Prop({ required: true })
   api_key: string;
 
-  @Prop({ required: true })
+  @Prop()
   webhook_url: string;
+
+  @Prop({
+    type: {
+      account_assets: { type: String, required: false, trim: true },
+      credit_card_spending: { type: String, required: false, trim: true },
+      client_registration: { type: String, required: false, trim: true },
+      client_marketing: { type: String, required: false, trim: true },
+    },
+  })
+  webhook_urls: {
+    account_assets?: string;
+    credit_card_spending?: string;
+    client_registration?: string;
+    client_marketing?: string;
+  };
 
   @Prop()
   webhook_secret: string;

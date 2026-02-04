@@ -16,6 +16,7 @@ import {
   PositionsByAccount,
   QueuesEnum,
   StorageUploadUtilsService,
+  WebhookModuleType,
   WebhookSenderRequests,
   WebhookSenderRequestStatus,
 } from 'src/shared';
@@ -465,7 +466,7 @@ export class AccountsAssetsConsumer extends WorkerHost {
           market_name: account.market_name,
           market_abbreviation: account.market_abbreviation,
           position_date: this.formatDate(account.position_date),
-          end_position_value: Number(account.end_position_value),
+          end_position_value: this.toNumber(account.end_position_value),
           end_position_value_formatted: this.formatCurrency(
             account.end_position_value,
           ),
@@ -481,7 +482,9 @@ export class AccountsAssetsConsumer extends WorkerHost {
   }
 
   private formatCurrency(value: number | string): string {
+    if (value === null || value === undefined || value === '') value = 0;
     if (typeof value === 'string') value = parseFloat(value);
+    if (!Number.isFinite(value as number)) value = 0;
 
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -518,6 +521,12 @@ export class AccountsAssetsConsumer extends WorkerHost {
     return `${data.toFixed(2)}%`;
   }
 
+  private toNumber(value: unknown): number {
+    if (value === null || value === undefined || value === '') return 0;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
   private async updateRequest(body: {
     id: string;
     status?: WebhookSenderRequestStatus;
@@ -548,7 +557,7 @@ export class AccountsAssetsConsumer extends WorkerHost {
       await lastValueFrom(
         this.http.post(
           webhook_url,
-          { data: signed_url },
+          { data: signed_url, type: WebhookModuleType.ACCOUNT_ASSETS },
           {
             validateStatus: (status) => status === 200 || status === 201,
           },

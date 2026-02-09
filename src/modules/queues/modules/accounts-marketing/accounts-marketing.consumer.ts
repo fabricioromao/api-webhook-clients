@@ -222,6 +222,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
         pl_renda_variavel: this.toNumber(account.pl_renda_variavel),
         pl_previdencia: this.toNumber(account.pl_previdencia),
         pl_derivativos: this.toNumber(account.pl_derivativos),
+        pl_valores_transito: this.toNumber(account.pl_valores_transito),
         rendimento_anual: this.toNumber(account.vl_rendimento_anual),
         pl_declarado: this.toNumber(account.vl_pl_declarado),
         genero: account.genero,

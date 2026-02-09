@@ -1,12 +1,19 @@
-import { BadRequestException, Controller, Get, Query, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ResponseHandlerService } from 'src/shared';
 import type { RequestType } from 'src/shared/types/request.types';
+import { RequestAccountsAssetsUseCase } from './use-cases/request-accounts-assets.use-case';
 import { RequestAccountsMarketingUseCase } from './use-cases/request-accounts-marketing.use-case';
 import { RequestAccountsRegistrationUseCase } from './use-cases/request-accounts-registration.use-case';
 import { RequestCreditCardSpendingUseCase } from './use-cases/request-credit-card-spending.use-case';
-import { RequestAccountsAssetsUseCase } from './use-cases/request-accounts-assets.use-case';
 
 @ApiTags('Solicitações de Webhook')
 @Controller('webhook-request')
@@ -68,6 +75,7 @@ export class WebhookRequestController {
       '| pl_renda_variavel | number | Saldo aplicado em renda variável. |',
       '| pl_previdencia | number | Saldo aplicado em previdência. |',
       '| pl_derivativos | number | Saldo aplicado em derivativos. |',
+      '| pl_valores_transito | number | Saldo de valores em trânsito. |',
       '| rendimento_anual | number | Rendimento anual. |',
       '| pl_declarado | number | Patrimônio declarado pelo cliente. |',
       '| genero | string | Gênero informado. |',
@@ -173,7 +181,10 @@ export class WebhookRequestController {
     required: true,
     schema: { type: 'string' },
   })
-  async requestAccountsRegistration(@Res() res: Response, @Req() req: RequestType) {
+  async requestAccountsRegistration(
+    @Res() res: Response,
+    @Req() req: RequestType,
+  ) {
     return await this.responseHandlerService.handle({
       method: async () => {
         return await this.requestAccountsRegistrationUseCase.execute(req);
@@ -224,7 +235,10 @@ export class WebhookRequestController {
     required: true,
     schema: { type: 'string' },
   })
-  async requestCreditCardSpending(@Res() res: Response, @Req() req: RequestType) {
+  async requestCreditCardSpending(
+    @Res() res: Response,
+    @Req() req: RequestType,
+  ) {
     return await this.responseHandlerService.handle({
       method: async () => {
         return await this.requestCreditCardSpendingUseCase.execute(req);

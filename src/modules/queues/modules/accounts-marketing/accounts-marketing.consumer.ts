@@ -390,6 +390,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
       'pl_renda_variavel',
       'pl_previdencia',
       'pl_derivativos',
+      'pl_valores_transito',
       'rendimento_anual',
       'pl_declarado',
       'genero',

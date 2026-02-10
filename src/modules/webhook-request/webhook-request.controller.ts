@@ -379,8 +379,6 @@ export class WebhookRequestController {
       '| receita_bruta | number | Receita bruta. |',
       '| receita_liquida | number | Receita líquida. |',
       '| comissao | number | Valor de comissão. |',
-      '',
-      '> O campo `rollback_code` não é retornado ao integrador.',
     ].join('\n'),
   })
   @ApiQuery({

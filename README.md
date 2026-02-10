@@ -68,8 +68,6 @@ Estrutura esperada dos registros no JSON dentro do ZIP:
 - `receita_liquida`
 - `comissao`
 
-O campo `rollback_code` não é retornado ao integrador.
-
 ## Project setup
 
 ```bash

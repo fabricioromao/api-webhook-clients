@@ -338,9 +338,9 @@ export class WebhookRequestController {
 
   @Get('commission-per-client')
   @ApiOperation({
-    summary: 'Commission Per Client',
+    summary: 'Receita Mensal',
     description: [
-      'Solicita o arquivo mensal de commission per client no Google Cloud Storage e envia um link assinado temporário ao webhook do integrador.',
+      'Solicita o arquivo mensal de receitas e envia um link assinado temporário ao webhook do integrador.',
       '',
       '### Parâmetro obrigatório',
       '- `referenceMonth`: mês/ano no formato `YYYY-MM`.',

@@ -20,6 +20,7 @@ export class CreateNewSenderDto {
     description: 'URLs de webhook por módulo',
     example: {
       account_assets: 'https://accassets.ngrok.app',
+      commission_per_client: 'https://commission.ngrok.app',
       credit_card_spending: 'https://ccspnd.ngrok.app',
       client_registration: 'https://clntreg.ngrok.app',
       client_marketing: 'https://clntsmkt.ngrok.app',
@@ -29,6 +30,7 @@ export class CreateNewSenderDto {
   @IsObject()
   webhook_urls: {
     account_assets?: string;
+    commission_per_client?: string;
     credit_card_spending?: string;
     client_registration?: string;
     client_marketing?: string;

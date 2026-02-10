@@ -81,6 +81,10 @@ export class StorageUploadUtilsService {
     return parts.slice(1).join('/');
   }
 
+  getPublicFileUrl(filePath: string): string {
+    return `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+  }
+
   /**
    * Gera uma URL assinada para um arquivo no GCS com expiração de 15 minutos
    * @param filePath Caminho relativo no bucket (ex: apiKey/data/file.csv)

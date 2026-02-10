@@ -25,6 +25,49 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Webhook Commission Per Client
+
+Novo endpoint:
+
+- `GET /webhook-request/commission-per-client?referenceMonth=YYYY-MM`
+
+Regras:
+
+- Exige `Authorization: Bearer <token>`.
+- Valida `referenceMonth` no formato `YYYY-MM`.
+- Converte internamente para o dia `01` e verifica no GCS: `commissionperclient/{YYYY-MM-01}.zip`.
+- Enfileira o processamento e envia callback para o webhook configurado em:
+  - `webhook_urls.commission_per_client`
+
+Payload de callback enviado ao integrador:
+
+```json
+{
+  "data": "https://...signed-url...",
+  "type": "commission_per_client"
+}
+```
+
+Estrutura esperada dos registros no JSON dentro do ZIP:
+
+- `data_competencia`
+- `data_receita`
+- `nr_conta`
+- `nome_completo`
+- `cge_officer`
+- `nm_officer`
+- `categoria`
+- `produto`
+- `ativo`
+- `codigo_produto`
+- `certificado_apolice`
+- `tipo_receita`
+- `receita_bruta`
+- `receita_liquida`
+- `comissao`
+
+O campo `rollback_code` não é retornado ao integrador.
+
 ## Project setup
 
 ```bash

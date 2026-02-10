@@ -13,6 +13,7 @@ import type { RequestType } from 'src/shared/types/request.types';
 import { RequestAccountsAssetsUseCase } from './use-cases/request-accounts-assets.use-case';
 import { RequestAccountsMarketingUseCase } from './use-cases/request-accounts-marketing.use-case';
 import { RequestAccountsRegistrationUseCase } from './use-cases/request-accounts-registration.use-case';
+import { RequestCommissionPerClientUseCase } from './use-cases/request-commission-per-client.use-case';
 import { RequestCreditCardSpendingUseCase } from './use-cases/request-credit-card-spending.use-case';
 
 @ApiTags('Solicitações de Webhook')
@@ -24,6 +25,7 @@ export class WebhookRequestController {
     private readonly requestAccountsRegistrationUseCase: RequestAccountsRegistrationUseCase,
     private readonly requestCreditCardSpendingUseCase: RequestCreditCardSpendingUseCase,
     private readonly requestAccountsAssetsUseCase: RequestAccountsAssetsUseCase,
+    private readonly requestCommissionPerClientUseCase: RequestCommissionPerClientUseCase,
   ) {}
 
   @Get('accounts-marketing')
@@ -334,6 +336,84 @@ export class WebhookRequestController {
     });
   }
 
+  @Get('commission-per-client')
+  @ApiOperation({
+    summary: 'Commission Per Client',
+    description: [
+      'Solicita o arquivo `commissionperclient/{referenceDate}.zip` no Google Cloud Storage e envia um link assinado temporário ao webhook do integrador.',
+      '',
+      '### Parâmetro obrigatório',
+      '- `referenceMonth`: mês/ano no formato `YYYY-MM`.',
+      '',
+      '### Regras',
+      '- O arquivo deve existir no bucket em `commissionperclient/{YYYY-MM-01}.zip`.',
+      '- Se o arquivo não existir, a API retorna erro e não cria envio.',
+      '',
+      '### Payload enviado ao webhook',
+      'Quando o processamento terminar, enviamos um POST para a URL cadastrada contendo um link temporário para download do arquivo:',
+      '',
+      '```json',
+      '{',
+      '  "data": "https://...signed-url...",',
+      '  "type": "commission_per_client"',
+      '}',
+      '```',
+      '',
+      'O link assinado expira em 15 minutos e aponta para um `.zip` já existente no Storage.',
+      '',
+      '### Estrutura do JSON dentro do ZIP',
+      '| Campo | Tipo | Descrição |',
+      '| --- | --- | --- |',
+      '| data_competencia | string (date) | Data de competência (UTC). |',
+      '| data_receita | string (date) | Data de receita (UTC). |',
+      '| nr_conta | string | Número da conta. |',
+      '| nome_completo | string | Nome completo do cliente. |',
+      '| cge_officer | number | Código do assessor. |',
+      '| nm_officer | string | Nome do assessor. |',
+      '| categoria | string | Categoria da receita/comissão. |',
+      '| produto | string | Produto. |',
+      '| ativo | string | Ativo. |',
+      '| codigo_produto | string | Código do produto. |',
+      '| certificado_apolice | string \\| null | Certificado/apólice, quando houver. |',
+      '| tipo_receita | string | Tipo da receita. |',
+      '| receita_bruta | number | Receita bruta. |',
+      '| receita_liquida | number | Receita líquida. |',
+      '| comissao | number | Valor de comissão. |',
+      '',
+      '> O campo `rollback_code` não é retornado ao integrador.',
+    ].join('\n'),
+  })
+  @ApiQuery({
+    name: 'referenceMonth',
+    required: true,
+    description: 'Mês de referência no formato YYYY-MM.',
+    schema: { type: 'string', example: '2025-10' },
+  })
+  @ApiHeader({
+    name: 'Authorization',
+    description: 'Bearer token para autenticação',
+    required: true,
+    schema: { type: 'string' },
+  })
+  async requestCommissionPerClient(
+    @Res() res: Response,
+    @Req() req: RequestType,
+    @Query('referenceMonth') referenceMonth: string,
+  ) {
+    const normalizedDate = this.normalizeReferenceMonth(referenceMonth);
+
+    return await this.responseHandlerService.handle({
+      method: async () => {
+        return await this.requestCommissionPerClientUseCase.execute(
+          req,
+          normalizedDate,
+        );
+      },
+      res,
+      successMessage: 'Solicitação de dados enviada com sucesso.',
+    });
+  }
+
   private normalizeAssetsQuery(assets?: string | string[]) {
     if (!assets) return undefined;
     const raw = Array.isArray(assets) ? assets : [assets];
@@ -360,5 +440,27 @@ export class WebhookRequestController {
     }
 
     return normalized.length ? normalized : undefined;
+  }
+
+  private normalizeReferenceMonth(referenceMonth?: string): string {
+    const value = String(referenceMonth || '').trim();
+    const isFormatValid = /^\d{4}-\d{2}$/.test(value);
+    if (!isFormatValid) {
+      throw new BadRequestException(
+        'Parâmetro referenceMonth inválido. Use o formato YYYY-MM.',
+      );
+    }
+
+    const parsed = new Date(`${value}-01T00:00:00.000Z`);
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 7) !== value
+    ) {
+      throw new BadRequestException(
+        'Parâmetro referenceMonth inválido. Use um mês válido no formato YYYY-MM.',
+      );
+    }
+
+    return `${value}-01`;
   }
 }

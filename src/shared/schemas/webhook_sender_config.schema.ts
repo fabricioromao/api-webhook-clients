@@ -20,6 +20,7 @@ export class WebhookSenderConfig extends Document {
   @Prop({
     type: {
       account_assets: { type: String, required: false, trim: true },
+      commission_per_client: { type: String, required: false, trim: true },
       credit_card_spending: { type: String, required: false, trim: true },
       client_registration: { type: String, required: false, trim: true },
       client_marketing: { type: String, required: false, trim: true },
@@ -27,6 +28,7 @@ export class WebhookSenderConfig extends Document {
   })
   webhook_urls: {
     account_assets?: string;
+    commission_per_client?: string;
     credit_card_spending?: string;
     client_registration?: string;
     client_marketing?: string;

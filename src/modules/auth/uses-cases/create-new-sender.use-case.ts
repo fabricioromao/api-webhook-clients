@@ -33,6 +33,7 @@ export class CreateNewSenderUseCase implements OnModuleInit {
   async execute(body: CreateNewSenderDto) {
     const urls = [
       body?.webhook_urls?.account_assets,
+      body?.webhook_urls?.commission_per_client,
       body?.webhook_urls?.credit_card_spending,
       body?.webhook_urls?.client_registration,
       body?.webhook_urls?.client_marketing,
@@ -48,6 +49,7 @@ export class CreateNewSenderUseCase implements OnModuleInit {
     const urlConditions = urls.flatMap((url) => [
       { webhook_url: url },
       { 'webhook_urls.account_assets': url },
+      { 'webhook_urls.commission_per_client': url },
       { 'webhook_urls.credit_card_spending': url },
       { 'webhook_urls.client_registration': url },
       { 'webhook_urls.client_marketing': url },

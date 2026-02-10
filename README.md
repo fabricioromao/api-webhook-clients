@@ -35,7 +35,7 @@ Regras:
 
 - Exige `Authorization: Bearer <token>`.
 - Valida `referenceMonth` no formato `YYYY-MM`.
-- Converte internamente para o dia `01` e verifica no GCS: `commissionperclient/{YYYY-MM-01}.zip`.
+- Converte internamente para o dia `01` e verifica se o arquivo mensal existe no GCS.
 - Enfileira o processamento e envia callback para o webhook configurado em:
   - `webhook_urls.commission_per_client`
 
@@ -47,6 +47,8 @@ Payload de callback enviado ao integrador:
   "type": "commission_per_client"
 }
 ```
+
+`data` é sempre uma URL assinada com expiração de 15 minutos.
 
 Estrutura esperada dos registros no JSON dentro do ZIP:
 

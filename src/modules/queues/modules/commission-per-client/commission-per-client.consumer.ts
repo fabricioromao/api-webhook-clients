@@ -91,6 +91,11 @@ export class CommissionPerClientConsumer extends WorkerHost {
         await this.storageUploadUtilsService.signedUrlWithExpiration(
           resolvedFilePath,
         );
+      if (!signedUrl) {
+        throw new Error(
+          `Falha ao gerar URL assinada para referência ${referenceDate}.`,
+        );
+      }
 
       await this.updateRequest({
         id,
@@ -111,6 +116,15 @@ export class CommissionPerClientConsumer extends WorkerHost {
         id: job.data.id,
         status: WebhookSenderRequestStatus.FAILED,
         internal_error: error.message,
+      });
+      const webhookUrl = await this.resolveWebhookUrl({
+        requestId: job.data.id,
+        webhookUrl: job.data.webhookUrl,
+      });
+      await this.notifyErrorToSenderWebhook({
+        requestId: job.data.id,
+        webhook_url: webhookUrl,
+        message: error.message,
       });
     }
   }
@@ -164,12 +178,66 @@ export class CommissionPerClientConsumer extends WorkerHost {
         `Dados enviados com sucesso para o webhook: ${webhook_url}`,
       );
     } catch (error) {
-      return await this.updateRequest({
+      await this.updateRequest({
         id: requestId,
         status: WebhookSenderRequestStatus.FAILED,
         error_api: error.message,
         webhook_url_sent: webhook_url,
       });
+      await this.notifyErrorToSenderWebhook({
+        requestId,
+        webhook_url,
+        message: error.message,
+      });
+      return null;
+    }
+  }
+
+  private async resolveWebhookUrl(params: {
+    requestId: string;
+    webhookUrl?: string;
+  }): Promise<string | undefined> {
+    if (params.webhookUrl) return params.webhookUrl;
+
+    const request = await this.webhookSenderRequestsModel
+      .findById(params.requestId)
+      .select('sender.webhook_url')
+      .lean()
+      .exec();
+
+    return request?.sender?.webhook_url;
+  }
+
+  private async notifyErrorToSenderWebhook(params: {
+    requestId: string;
+    webhook_url?: string;
+    message: string;
+  }) {
+    if (!params.webhook_url) {
+      this.logger.warn(
+        `Webhook URL não encontrada para notificar erro da solicitação ${params.requestId}`,
+      );
+      return;
+    }
+
+    try {
+      await lastValueFrom(
+        this.http.post(
+          params.webhook_url,
+          {
+            type: WebhookModuleType.COMMISSION_PER_CLIENT,
+            status: 'error',
+            error: params.message,
+          },
+          {
+            validateStatus: (status) => status === 200 || status === 201,
+          },
+        ),
+      );
+    } catch (notifyError) {
+      this.logger.error(
+        `Falha ao notificar erro para webhook ${params.webhook_url}: ${notifyError.message}`,
+      );
     }
   }
 }

@@ -1,7 +1,12 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Model } from 'mongoose';
-import { StorageUploadUtilsService, WebhookSenderRequests } from 'src/shared';
+import {
+  StorageUploadUtilsService,
+  WebhookSenderRequests,
+  WebhookSenderRequestType,
+} from 'src/shared';
 
 @Injectable()
 export class RemoveOldUploadsUseCase implements OnModuleInit {
@@ -18,9 +23,9 @@ export class RemoveOldUploadsUseCase implements OnModuleInit {
     // await this.execute();
   }
 
-  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
-  //   timeZone: 'America/Sao_Paulo',
-  // })
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+    timeZone: 'America/Sao_Paulo',
+  })
   async execute() {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
@@ -30,8 +35,9 @@ export class RemoveOldUploadsUseCase implements OnModuleInit {
         createdAt: { $lt: threeDaysAgo },
         is_deleted: false,
         upload_url: { $exists: true, $ne: null },
+        type: { $ne: WebhookSenderRequestType.COMMISSION_PER_CLIENT },
       })
-      .select('_id upload_url')
+      .select('_id upload_url type')
       .lean()
       .exec();
 
@@ -44,6 +50,11 @@ export class RemoveOldUploadsUseCase implements OnModuleInit {
 
     for (const request of requests) {
       try {
+        // Safety net: commission_per_client files are not managed by this service.
+        if (request.type === WebhookSenderRequestType.COMMISSION_PER_CLIENT) {
+          continue;
+        }
+
         const uploadPath = this.storageUploadUtilsService.getRelativeFilePath(
           request.upload_url!,
         );

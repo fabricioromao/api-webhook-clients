@@ -1,6 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { Model } from 'mongoose';
 import { StorageUploadUtilsService, WebhookSenderRequests } from 'src/shared';
 
@@ -19,9 +18,9 @@ export class RemoveOldUploadsUseCase implements OnModuleInit {
     // await this.execute();
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
-    timeZone: 'America/Sao_Paulo',
-  })
+  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+  //   timeZone: 'America/Sao_Paulo',
+  // })
   async execute() {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);

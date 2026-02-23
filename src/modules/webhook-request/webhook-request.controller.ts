@@ -77,6 +77,7 @@ export class WebhookRequestController {
       '| pl_renda_variavel | number | Saldo aplicado em renda variável. |',
       '| pl_previdencia | number | Saldo aplicado em previdência. |',
       '| pl_derivativos | number | Saldo aplicado em derivativos. |',
+      '| pl_crypto | number | Saldo aplicado em criptoativos (PL crypto). |',
       '| pl_valores_transito | number | Saldo de valores em trânsito. |',
       '| rendimento_anual | number | Rendimento anual. |',
       '| pl_declarado | number | Patrimônio declarado pelo cliente. |',

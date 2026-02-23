@@ -14,6 +14,7 @@ import {
   Accounts,
   BankingReports,
   OpenFinance,
+  PositionsByAccount,
   QueuesEnum,
   StorageUploadUtilsService,
   WebhookModuleType,
@@ -38,6 +39,8 @@ export class AccountsMarketingConsumer extends WorkerHost {
     private bankingReportsModel: Model<BankingReports>,
     @InjectModel(OpenFinance.name)
     private openFinanceModel: Model<OpenFinance>,
+    @InjectModel(PositionsByAccount.name)
+    private positionsByAccountModel: Model<PositionsByAccount>,
 
     private readonly storageUploadUtilsService: StorageUploadUtilsService,
     private readonly http: HttpService,
@@ -168,9 +171,22 @@ export class AccountsMarketingConsumer extends WorkerHost {
       header: false,
     });
 
-    const [bankingReports, openFinances] = await Promise.all([
+    const [bankingReports, openFinances, latestPositions] = await Promise.all([
       this.bankingReportsModel.find().lean(),
       this.openFinanceModel.find().lean(),
+      this.positionsByAccountModel
+        .aggregate([
+          { $sort: { reference_date: -1, createdAt: -1 } },
+          {
+            $group: {
+              _id: '$account_number',
+              crypto_coin: { $first: '$crypto_coin' },
+            },
+          },
+          { $project: { _id: 1, crypto_coin: 1 } },
+        ])
+        .allowDiskUse(true)
+        .exec(),
     ]);
 
     const bankingMap = new Map(bankingReports.map((b) => [b.nr_conta, b]));
@@ -179,6 +195,12 @@ export class AccountsMarketingConsumer extends WorkerHost {
       if (!financeMap.has(f.nr_conta)) financeMap.set(f.nr_conta, []);
       financeMap.get(f.nr_conta)!.push(f);
     }
+    const cryptoMap = new Map<string, any[]>(
+      latestPositions.map((position) => [
+        String(position._id),
+        position.crypto_coin || [],
+      ]),
+    );
 
     // header
     output.write(this.fields().join(',') + '\n');
@@ -186,6 +208,13 @@ export class AccountsMarketingConsumer extends WorkerHost {
     for await (const account of accountsCursor) {
       const banking = bankingMap.get(account.nr_conta);
       const openFinance = financeMap.get(account.nr_conta) || [];
+      const cryptoCoin = cryptoMap.get(account.nr_conta) || [];
+      const plCrypto = Array.isArray(cryptoCoin)
+        ? cryptoCoin.reduce(
+            (acc, item) => acc + this.toNumber(item?.financial),
+            0,
+          )
+        : 0;
 
       const idade = account.dt_nascimento_date
         ? Math.floor(
@@ -231,6 +260,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
         pl_renda_variavel: this.toNumber(account.pl_renda_variavel),
         pl_previdencia: this.toNumber(account.pl_previdencia),
         pl_derivativos: this.toNumber(account.pl_derivativos),
+        pl_crypto: this.toNumber(plCrypto),
         pl_valores_transito: this.toNumber(account.pl_valores_transito),
         rendimento_anual: this.toNumber(account.vl_rendimento_anual),
         pl_declarado: this.toNumber(account.vl_pl_declarado),
@@ -453,6 +483,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
       'pl_renda_variavel',
       'pl_previdencia',
       'pl_derivativos',
+      'pl_crypto',
       'pl_valores_transito',
       'rendimento_anual',
       'pl_declarado',

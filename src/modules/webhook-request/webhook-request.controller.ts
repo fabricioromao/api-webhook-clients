@@ -61,6 +61,7 @@ export class WebhookRequestController {
       '| nm_assessor | string | Nome do assessor vinculado à conta. |',
       '| codigo_assessor | string | Código do assessor vinculado à conta. |',
       '| tipo_cliente | string | Tipo de cliente (PF, PJ). |',
+      '| status | string | Status da conta. |',
       '| profissao | string | Profissão informada pelo cliente. |',
       '| estado_civil | string | Estado civil cadastrado. |',
       '| estado | string | UF de residência. |',

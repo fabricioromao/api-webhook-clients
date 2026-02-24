@@ -171,22 +171,9 @@ export class AccountsMarketingConsumer extends WorkerHost {
       header: false,
     });
 
-    const [bankingReports, openFinances, latestPositions] = await Promise.all([
+    const [bankingReports, openFinances] = await Promise.all([
       this.bankingReportsModel.find().lean(),
       this.openFinanceModel.find().lean(),
-      this.positionsByAccountModel
-        .aggregate([
-          { $sort: { reference_date: -1, createdAt: -1 } },
-          {
-            $group: {
-              _id: '$account_number',
-              crypto_coin: { $first: '$crypto_coin' },
-            },
-          },
-          { $project: { _id: 1, crypto_coin: 1 } },
-        ])
-        .allowDiskUse(true)
-        .exec(),
     ]);
 
     const bankingMap = new Map(bankingReports.map((b) => [b.nr_conta, b]));
@@ -195,17 +182,61 @@ export class AccountsMarketingConsumer extends WorkerHost {
       if (!financeMap.has(f.nr_conta)) financeMap.set(f.nr_conta, []);
       financeMap.get(f.nr_conta)!.push(f);
     }
-    const cryptoMap = new Map<string, any[]>(
-      latestPositions.map((position) => [
-        String(position._id),
-        position.crypto_coin || [],
-      ]),
-    );
-
     // header
     output.write(this.fields().join(',') + '\n');
 
+    const batchSize = 1_000;
+    const accountsBatch: Accounts[] = [];
+
     for await (const account of accountsCursor) {
+      accountsBatch.push(account as Accounts);
+      if (accountsBatch.length >= batchSize) {
+        await this.writeAccountsBatch({
+          accountsBatch,
+          parser,
+          output,
+          bankingMap,
+          financeMap,
+        });
+        accountsBatch.length = 0;
+      }
+    }
+
+    if (accountsBatch.length) {
+      await this.writeAccountsBatch({
+        accountsBatch,
+        parser,
+        output,
+        bankingMap,
+        financeMap,
+      });
+    }
+
+    // AGORA espere o stream terminar
+    await new Promise<void>((resolve, reject) => {
+      output.on('finish', resolve);
+      output.on('error', reject);
+      output.end();
+    });
+
+    const zipFile = await this.storageUploadUtilsService.zipFile(this.filePath);
+    await fs.unlink(this.filePath);
+    return zipFile;
+  }
+
+  private async writeAccountsBatch(params: {
+    accountsBatch: Accounts[];
+    parser: Parser<any>;
+    output: NodeJS.WritableStream;
+    bankingMap: Map<string, BankingReports>;
+    financeMap: Map<string, OpenFinance[]>;
+  }) {
+    const { accountsBatch, parser, output, bankingMap, financeMap } = params;
+    const cryptoMap = await this.getLatestCryptoMapByAccounts(
+      accountsBatch.map((account) => account.nr_conta).filter(Boolean),
+    );
+
+    for (const account of accountsBatch) {
       const banking = bankingMap.get(account.nr_conta);
       const openFinance = financeMap.get(account.nr_conta) || [];
       const cryptoCoin = cryptoMap.get(account.nr_conta) || [];
@@ -315,17 +346,32 @@ export class AccountsMarketingConsumer extends WorkerHost {
 
       output.write(parser.parse([row]) + '\n');
     }
+  }
 
-    // AGORA espere o stream terminar
-    await new Promise<void>((resolve, reject) => {
-      output.on('finish', resolve);
-      output.on('error', reject);
-      output.end();
-    });
+  private async getLatestCryptoMapByAccounts(accountNumbers: string[]) {
+    if (!accountNumbers.length) return new Map<string, any[]>();
 
-    const zipFile = await this.storageUploadUtilsService.zipFile(this.filePath);
-    await fs.unlink(this.filePath);
-    return zipFile;
+    const latestPositions = await this.positionsByAccountModel
+      .aggregate([
+        { $match: { account_number: { $in: accountNumbers } } },
+        { $sort: { reference_date: -1, createdAt: -1 } },
+        {
+          $group: {
+            _id: '$account_number',
+            crypto_coin: { $first: '$crypto_coin' },
+          },
+        },
+        { $project: { _id: 1, crypto_coin: 1 } },
+      ])
+      .allowDiskUse(true)
+      .exec();
+
+    return new Map<string, any[]>(
+      latestPositions.map((position) => [
+        String(position._id),
+        position.crypto_coin || [],
+      ]),
+    );
   }
 
   async updateRequest(body: {

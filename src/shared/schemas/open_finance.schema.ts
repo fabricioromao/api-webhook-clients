@@ -40,3 +40,5 @@ export class OpenFinance {
 }
 
 export const OpenFinanceSchema = SchemaFactory.createForClass(OpenFinance);
+
+OpenFinanceSchema.index({ nr_conta: 1 });

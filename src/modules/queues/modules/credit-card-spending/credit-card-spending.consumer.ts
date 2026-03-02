@@ -23,6 +23,7 @@ import { CreditCardSpendingDto } from 'src/shared/dto';
 export class CreditCardSpendingConsumer extends WorkerHost {
   private logger = new Logger(CreditCardSpendingConsumer.name);
   private filePath = join(process.cwd(), 'credit_card_spending.json');
+  private readonly batchSize = 500;
 
   constructor(
     @InjectModel(WebhookSenderRequests.name)
@@ -98,8 +99,7 @@ export class CreditCardSpendingConsumer extends WorkerHost {
         });
       }
 
-      const payload = await this.buildPayload();
-      const zipFile = await this.generateZipFromPayload(payload);
+      const zipFile = await this.generateZipFromCollections();
 
       const uploadUrl = await this.storageUploadUtilsService.uploadToStorage({
         apiKey,
@@ -146,46 +146,169 @@ export class CreditCardSpendingConsumer extends WorkerHost {
     }
   }
 
-  private async buildPayload() {
-    const [accounts, spendings] = await Promise.all([
-      this.accountsModel.find().lean().exec(),
-      this.creditCardSpendingHistoryModel
+  private async generateZipFromCollections() {
+    const output = await fs.open(this.filePath, 'w');
+
+    try {
+      await output.write('[');
+
+      let first = true;
+      let batch: Array<{ nr_conta: string; nome_completo: string }> = [];
+      const seenAccounts = new Set<string>();
+      let duplicatedAccounts = 0;
+      let invalidAccounts = 0;
+      let duplicatedSpendingEntries = 0;
+      let invalidSpendingAccounts = 0;
+
+      const accountsCursor = this.accountsModel
         .find()
-        .select({
-          reference_month: 1,
-          gasto_cartao_centavos: 1,
-          gasto_cartao_formatado: 1,
-          nr_conta: 1,
-          _id: 0,
-        })
+        .select({ nr_conta: 1, nome_completo: 1, _id: 0 })
         .lean()
-        .exec(),
-    ]);
+        .cursor({ batchSize: this.batchSize });
+
+      for await (const account of accountsCursor) {
+        const accountNumber = this.normalizeAccountNumber(account.nr_conta);
+        if (!accountNumber) {
+          invalidAccounts++;
+          continue;
+        }
+
+        if (seenAccounts.has(accountNumber)) {
+          duplicatedAccounts++;
+          continue;
+        }
+
+        seenAccounts.add(accountNumber);
+        batch.push({
+          nr_conta: accountNumber,
+          nome_completo: account.nome_completo || '',
+        });
+
+        if (batch.length >= this.batchSize) {
+          const result = await this.processBatch({ batch, first, output });
+          first = result.first;
+          duplicatedSpendingEntries += result.duplicatedSpendingEntries;
+          invalidSpendingAccounts += result.invalidSpendingAccounts;
+          batch = [];
+        }
+      }
+
+      if (batch.length) {
+        const result = await this.processBatch({ batch, first, output });
+        first = result.first;
+        duplicatedSpendingEntries += result.duplicatedSpendingEntries;
+        invalidSpendingAccounts += result.invalidSpendingAccounts;
+      }
+
+      if (duplicatedAccounts || invalidAccounts) {
+        this.logger.warn(
+          `Credit Card Spending: contas duplicadas ignoradas=${duplicatedAccounts}, sem nr_conta=${invalidAccounts}`,
+        );
+      }
+
+      if (duplicatedSpendingEntries || invalidSpendingAccounts) {
+        this.logger.warn(
+          `Credit Card Spending: lançamentos duplicados ignorados=${duplicatedSpendingEntries}, sem nr_conta=${invalidSpendingAccounts}`,
+        );
+      }
+
+      await output.write(']');
+    } finally {
+      await output.close();
+    }
+
+    const zipFile = await this.storageUploadUtilsService.zipFile(this.filePath);
+    await fs.unlink(this.filePath);
+    return zipFile;
+  }
+
+  private async processBatch(params: {
+    batch: Array<{ nr_conta: string; nome_completo: string }>;
+    first: boolean;
+    output: fs.FileHandle;
+  }) {
+    const { batch, output } = params;
+    let { first } = params;
+
+    const accountNumbers = [
+      ...new Set(batch.map((account) => account.nr_conta).filter(Boolean)),
+    ];
+
+    const spendings = await this.creditCardSpendingHistoryModel
+      .find({ nr_conta: { $in: accountNumbers } })
+      .select({
+        reference_month: 1,
+        gasto_cartao_centavos: 1,
+        gasto_cartao_formatado: 1,
+        nr_conta: 1,
+        _id: 0,
+      })
+      .lean()
+      .exec();
 
     const spendingMap = new Map<
       string,
-      Array<{
-        reference_month?: string;
-        gasto_cartao_centavos?: number;
-        gasto_cartao_formatado?: string;
-      }>
+      Map<
+        string,
+        {
+          reference_month?: string;
+          gasto_cartao_centavos?: number;
+          gasto_cartao_formatado?: string;
+        }
+      >
     >();
+
+    let duplicatedSpendingEntries = 0;
+    let invalidSpendingAccounts = 0;
+
     for (const item of spendings) {
-      if (!spendingMap.has(item.nr_conta)) spendingMap.set(item.nr_conta, []);
-      spendingMap.get(item.nr_conta)!.push({
+      const accountNumber = this.normalizeAccountNumber(item.nr_conta);
+      if (!accountNumber) {
+        invalidSpendingAccounts++;
+        continue;
+      }
+
+      if (!spendingMap.has(accountNumber)) spendingMap.set(accountNumber, new Map());
+
+      const referenceMonth = item.reference_month || '';
+      const accountSpendings = spendingMap.get(accountNumber)!;
+      if (referenceMonth && accountSpendings.has(referenceMonth)) {
+        duplicatedSpendingEntries++;
+        continue;
+      }
+
+      accountSpendings.set(referenceMonth, {
         reference_month: item.reference_month,
         gasto_cartao_centavos: item.gasto_cartao_centavos,
         gasto_cartao_formatado: item.gasto_cartao_formatado,
       });
     }
 
-    return accounts.map((account) => ({
-      nr_conta: account.nr_conta,
-      nome_completo: account.nome_completo,
-      credit_card_spending_history: this.groupCreditCardSpendingByYear(
-        spendingMap.get(account.nr_conta) || [],
-      ),
-    }));
+    for (const account of batch) {
+      const accountSpendings = Array.from(
+        spendingMap.get(account.nr_conta)?.values() || [],
+      );
+      const payload = {
+        nr_conta: account.nr_conta,
+        nome_completo: account.nome_completo,
+        credit_card_spending_history: this.groupCreditCardSpendingByYear(
+          accountSpendings,
+        ),
+      };
+
+      await this.writeWithBackpressure(
+        output,
+        `${first ? '' : ','}${JSON.stringify(payload)}`,
+      );
+      first = false;
+    }
+
+    return { first, duplicatedSpendingEntries, invalidSpendingAccounts };
+  }
+
+  private normalizeAccountNumber(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
   }
 
   private async updateRequest(body: {
@@ -300,13 +423,8 @@ export class CreditCardSpendingConsumer extends WorkerHost {
     }
   }
 
-  private async generateZipFromPayload(payload: unknown) {
-    const jsonPayload = JSON.stringify(payload);
-    await fs.writeFile(this.filePath, jsonPayload);
-
-    const zipFile = await this.storageUploadUtilsService.zipFile(this.filePath);
-    await fs.unlink(this.filePath);
-    return zipFile;
+  private async writeWithBackpressure(output: fs.FileHandle, data: string) {
+    await output.write(data);
   }
 
   private formatReferenceMonth(value?: string): string | null {

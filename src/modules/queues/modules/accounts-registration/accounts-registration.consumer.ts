@@ -27,6 +27,7 @@ export class AccountsRegistrationConsumer extends WorkerHost {
   private logger = new Logger(AccountsRegistrationConsumer.name);
 
   private filePath = join(process.cwd(), 'clients_registration.csv');
+  private readonly batchSize = 500;
 
   constructor(
     @InjectModel(WebhookSenderRequests.name)
@@ -153,8 +154,38 @@ export class AccountsRegistrationConsumer extends WorkerHost {
   async generateCsvFromCollections() {
     const accountsCursor = this.accountsModel
       .find()
+      .select({
+        nr_conta: 1,
+        nome_completo: 1,
+        email: 1,
+        documento_cpf_cnpj: 1,
+        tipo_cliente: 1,
+        dt_nascimento: 1,
+        celular: 1,
+        profissao: 1,
+        estado_civil: 1,
+        endereco_completo: 1,
+        endereco_complemento: 1,
+        endereco_cidade: 1,
+        endereco_estado: 1,
+        endereco_cep: 1,
+        dt_abertura: 1,
+        dt_encerramento: 1,
+        dt_vinculo: 1,
+        dt_primeiro_investimento: 1,
+        dt_ultimo_investimento: 1,
+        status: 1,
+        genero: 1,
+        perfil_investidor: 1,
+        tipo_investidor: 1,
+        suitability: 1,
+        faixa_cliente: 1,
+        nm_officer: 1,
+        cge_officer: 1,
+        _id: 0,
+      })
       .lean()
-      .cursor({ batchSize: 1_000 });
+      .cursor({ batchSize: this.batchSize });
 
     const output = createWriteStream(this.filePath);
 
@@ -164,57 +195,54 @@ export class AccountsRegistrationConsumer extends WorkerHost {
       header: false,
     });
 
-    const engagementDocs = await this.customerEngagementModel.find().lean();
-    const engagementMap = new Map(
-      engagementDocs.map((e) => [e.cpf_cnpj, e]),
-    );
-
     // header
-    output.write(this.fields().join(',') + '\n');
+    await this.writeWithBackpressure(output, this.fields().join(',') + '\n');
+
+    const accountsBatch: Accounts[] = [];
+    const seenAccounts = new Set<string>();
+    let duplicatedAccounts = 0;
+    let invalidAccounts = 0;
 
     for await (const account of accountsCursor) {
-      const engagement = engagementMap.get(account.documento_cpf_cnpj);
+      const accountNumber = this.normalizeAccountNumber(account.nr_conta);
+      if (!accountNumber) {
+        invalidAccounts++;
+        continue;
+      }
 
-      const row = {
-        nr_conta: account.nr_conta,
-        nome_completo: account.nome_completo,
-        email: account.email,
-        documento_cpf_cnpj: account.documento_cpf_cnpj,
-        tipo_cliente: account.tipo_cliente,
-        dt_nascimento: account.dt_nascimento,
-        celular: account.celular,
-        profissao: account.profissao,
-        estado_civil: account.estado_civil,
-        endereco_completo: account.endereco_completo,
-        endereco_complemento: account.endereco_complemento,
-        endereco_cidade: account.endereco_cidade,
-        endereco_estado: account.endereco_estado,
-        endereco_cep: account.endereco_cep,
-        dt_abertura: account.dt_abertura ? formatDate(account.dt_abertura) : '',
-        dt_encerramento: account.dt_encerramento
-          ? formatDate(account.dt_encerramento)
-          : '',
-        dt_vinculo: account.dt_vinculo ? formatDate(account.dt_vinculo) : '',
-        dt_primeiro_investimento: account.dt_primeiro_investimento
-          ? formatDate(account.dt_primeiro_investimento)
-          : '',
-        dt_ultimo_investimento: account.dt_ultimo_investimento
-          ? formatDate(account.dt_ultimo_investimento)
-          : '',
-        status: account.status,
-        genero: account.genero,
-        perfil_investidor: account.perfil_investidor,
-        tipo_investidor: account.tipo_investidor,
-        suitability: account.suitability,
-        faixa_cliente: account.faixa_cliente,
-        nm_assessor: account.nm_officer,
-        cge_code: account.cge_officer,
-        cge_officer: account.cge_officer,
-        nivel_engajamento: engagement?.nivel_engajamento || '',
-        explicacao_engajamento: engagement?.explicacao_engajamento || '',
-      };
+      if (seenAccounts.has(accountNumber)) {
+        duplicatedAccounts++;
+        continue;
+      }
 
-      output.write(parser.parse([row]) + '\n');
+      seenAccounts.add(accountNumber);
+      accountsBatch.push({
+        ...(account as Accounts),
+        nr_conta: accountNumber,
+      });
+
+      if (accountsBatch.length >= this.batchSize) {
+        await this.writeAccountsBatch({
+          accountsBatch,
+          parser,
+          output,
+        });
+        accountsBatch.length = 0;
+      }
+    }
+
+    if (accountsBatch.length) {
+      await this.writeAccountsBatch({
+        accountsBatch,
+        parser,
+        output,
+      });
+    }
+
+    if (duplicatedAccounts || invalidAccounts) {
+      this.logger.warn(
+        `Accounts Registration: duplicadas ignoradas=${duplicatedAccounts}, sem nr_conta=${invalidAccounts}`,
+      );
     }
 
     await new Promise<void>((resolve, reject) => {
@@ -373,5 +401,92 @@ export class AccountsRegistrationConsumer extends WorkerHost {
       'nivel_engajamento',
       'explicacao_engajamento',
     ];
+  }
+
+  private normalizeAccountNumber(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+  }
+
+  private async writeAccountsBatch(params: {
+    accountsBatch: Accounts[];
+    parser: Parser<any>;
+    output: NodeJS.WritableStream;
+  }) {
+    const { accountsBatch, parser, output } = params;
+    const cpfCnpjList = [
+      ...new Set(
+        accountsBatch
+          .map((account) => account.documento_cpf_cnpj)
+          .filter((value) => value),
+      ),
+    ];
+
+    const engagementDocs = await this.customerEngagementModel
+      .find({ cpf_cnpj: { $in: cpfCnpjList } })
+      .select({
+        cpf_cnpj: 1,
+        nivel_engajamento: 1,
+        explicacao_engajamento: 1,
+        _id: 0,
+      })
+      .lean()
+      .exec();
+
+    const engagementMap = new Map(
+      engagementDocs.map((e) => [e.cpf_cnpj, e]),
+    );
+
+    for (const account of accountsBatch) {
+      const engagement = engagementMap.get(account.documento_cpf_cnpj);
+      const row = {
+        nr_conta: account.nr_conta,
+        nome_completo: account.nome_completo,
+        email: account.email,
+        documento_cpf_cnpj: account.documento_cpf_cnpj,
+        tipo_cliente: account.tipo_cliente,
+        dt_nascimento: account.dt_nascimento,
+        celular: account.celular,
+        profissao: account.profissao,
+        estado_civil: account.estado_civil,
+        endereco_completo: account.endereco_completo,
+        endereco_complemento: account.endereco_complemento,
+        endereco_cidade: account.endereco_cidade,
+        endereco_estado: account.endereco_estado,
+        endereco_cep: account.endereco_cep,
+        dt_abertura: account.dt_abertura ? formatDate(account.dt_abertura) : '',
+        dt_encerramento: account.dt_encerramento
+          ? formatDate(account.dt_encerramento)
+          : '',
+        dt_vinculo: account.dt_vinculo ? formatDate(account.dt_vinculo) : '',
+        dt_primeiro_investimento: account.dt_primeiro_investimento
+          ? formatDate(account.dt_primeiro_investimento)
+          : '',
+        dt_ultimo_investimento: account.dt_ultimo_investimento
+          ? formatDate(account.dt_ultimo_investimento)
+          : '',
+        status: account.status,
+        genero: account.genero,
+        perfil_investidor: account.perfil_investidor,
+        tipo_investidor: account.tipo_investidor,
+        suitability: account.suitability,
+        faixa_cliente: account.faixa_cliente,
+        nm_assessor: account.nm_officer,
+        cge_code: account.cge_officer,
+        cge_officer: account.cge_officer,
+        nivel_engajamento: engagement?.nivel_engajamento || '',
+        explicacao_engajamento: engagement?.explicacao_engajamento || '',
+      };
+
+      await this.writeWithBackpressure(output, parser.parse([row]) + '\n');
+    }
+  }
+
+  private async writeWithBackpressure(
+    output: NodeJS.WritableStream,
+    data: string,
+  ) {
+    if (output.write(data)) return;
+    await new Promise<void>((resolve) => output.once('drain', resolve));
   }
 }

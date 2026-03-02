@@ -29,6 +29,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
   private logger = new Logger(AccountsMarketingConsumer.name);
 
   private filePath = join(process.cwd(), 'clients_marketing.csv');
+  private readonly batchSize = 500;
 
   constructor(
     @InjectModel(WebhookSenderRequests.name)
@@ -160,8 +161,43 @@ export class AccountsMarketingConsumer extends WorkerHost {
   async generateCsvFromCollections() {
     const accountsCursor = this.accountsModel
       .find()
+      .select({
+        nr_conta: 1,
+        nome_completo: 1,
+        email: 1,
+        documento_cpf_cnpj: 1,
+        dt_nascimento_date: 1,
+        dt_nascimento: 1,
+        celular: 1,
+        nm_officer: 1,
+        cge_officer: 1,
+        tipo_cliente: 1,
+        status: 1,
+        profissao: 1,
+        estado_civil: 1,
+        endereco_estado: 1,
+        endereco_cidade: 1,
+        dt_vinculo: 1,
+        dt_vinculo_escritorio: 1,
+        perfil_investidor: 1,
+        faixa_cliente: 1,
+        dt_primeiro_investimento: 1,
+        pl_conta_corrente: 1,
+        pl_total: 1,
+        pl_fundos: 1,
+        pl_renda_fixa: 1,
+        pl_renda_variavel: 1,
+        pl_previdencia: 1,
+        pl_derivativos: 1,
+        pl_valores_transito: 1,
+        vl_rendimento_anual: 1,
+        vl_pl_declarado: 1,
+        genero: 1,
+        suitability: 1,
+        _id: 0,
+      })
       .lean()
-      .cursor({ batchSize: 1_000 }); // lotes de 1000 (não muda o total)
+      .cursor({ batchSize: this.batchSize });
 
     const output = createWriteStream(this.filePath);
 
@@ -171,32 +207,38 @@ export class AccountsMarketingConsumer extends WorkerHost {
       header: false,
     });
 
-    const [bankingReports, openFinances] = await Promise.all([
-      this.bankingReportsModel.find().lean(),
-      this.openFinanceModel.find().lean(),
-    ]);
-
-    const bankingMap = new Map(bankingReports.map((b) => [b.nr_conta, b]));
-    const financeMap = new Map<string, OpenFinance[]>();
-    for (const f of openFinances) {
-      if (!financeMap.has(f.nr_conta)) financeMap.set(f.nr_conta, []);
-      financeMap.get(f.nr_conta)!.push(f);
-    }
     // header
-    output.write(this.fields().join(',') + '\n');
+    await this.writeWithBackpressure(output, this.fields().join(',') + '\n');
 
-    const batchSize = 1_000;
     const accountsBatch: Accounts[] = [];
+    const seenAccounts = new Set<string>();
+    let duplicatedAccounts = 0;
+    let invalidAccounts = 0;
 
     for await (const account of accountsCursor) {
-      accountsBatch.push(account as Accounts);
-      if (accountsBatch.length >= batchSize) {
+      const accountNumber = this.normalizeAccountNumber(account.nr_conta);
+      if (!accountNumber) {
+        invalidAccounts++;
+        continue;
+      }
+
+      if (seenAccounts.has(accountNumber)) {
+        duplicatedAccounts++;
+        continue;
+      }
+
+      seenAccounts.add(accountNumber);
+
+      accountsBatch.push({
+        ...(account as Accounts),
+        nr_conta: accountNumber,
+      });
+
+      if (accountsBatch.length >= this.batchSize) {
         await this.writeAccountsBatch({
           accountsBatch,
           parser,
           output,
-          bankingMap,
-          financeMap,
         });
         accountsBatch.length = 0;
       }
@@ -207,9 +249,13 @@ export class AccountsMarketingConsumer extends WorkerHost {
         accountsBatch,
         parser,
         output,
-        bankingMap,
-        financeMap,
       });
+    }
+
+    if (duplicatedAccounts || invalidAccounts) {
+      this.logger.warn(
+        `Accounts Marketing: duplicadas ignoradas=${duplicatedAccounts}, sem nr_conta=${invalidAccounts}`,
+      );
     }
 
     // AGORA espere o stream terminar
@@ -228,13 +274,32 @@ export class AccountsMarketingConsumer extends WorkerHost {
     accountsBatch: Accounts[];
     parser: Parser<any>;
     output: NodeJS.WritableStream;
-    bankingMap: Map<string, BankingReports>;
-    financeMap: Map<string, OpenFinance[]>;
   }) {
-    const { accountsBatch, parser, output, bankingMap, financeMap } = params;
-    const cryptoMap = await this.getLatestCryptoMapByAccounts(
-      accountsBatch.map((account) => account.nr_conta).filter(Boolean),
-    );
+    const { accountsBatch, parser, output } = params;
+    const accountNumbers = [
+      ...new Set(
+        accountsBatch.map((account) => account.nr_conta).filter(Boolean),
+      ),
+    ];
+
+    const [bankingReports, openFinances, cryptoMap] = await Promise.all([
+      this.bankingReportsModel
+        .find({ nr_conta: { $in: accountNumbers } })
+        .lean()
+        .exec(),
+      this.openFinanceModel
+        .find({ nr_conta: { $in: accountNumbers } })
+        .lean()
+        .exec(),
+      this.getLatestCryptoMapByAccounts(accountNumbers),
+    ]);
+
+    const bankingMap = new Map(bankingReports.map((b) => [b.nr_conta, b]));
+    const financeMap = new Map<string, OpenFinance[]>();
+    for (const f of openFinances) {
+      if (!financeMap.has(f.nr_conta)) financeMap.set(f.nr_conta, []);
+      financeMap.get(f.nr_conta)!.push(f);
+    }
 
     for (const account of accountsBatch) {
       const banking = bankingMap.get(account.nr_conta);
@@ -345,7 +410,7 @@ export class AccountsMarketingConsumer extends WorkerHost {
           : 0,
       };
 
-      output.write(parser.parse([row]) + '\n');
+      await this.writeWithBackpressure(output, parser.parse([row]) + '\n');
     }
   }
 
@@ -564,6 +629,19 @@ export class AccountsMarketingConsumer extends WorkerHost {
     if (value === null || value === undefined || value === '') return 0;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private normalizeAccountNumber(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+  }
+
+  private async writeWithBackpressure(
+    output: NodeJS.WritableStream,
+    data: string,
+  ) {
+    if (output.write(data)) return;
+    await new Promise<void>((resolve) => output.once('drain', resolve));
   }
 
   private estadosBrasil(): string[] {

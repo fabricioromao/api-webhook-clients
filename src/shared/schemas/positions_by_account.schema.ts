@@ -223,3 +223,6 @@ export class PositionsByAccount {
 
 export const PositionsByAccountSchema =
   SchemaFactory.createForClass(PositionsByAccount);
+
+PositionsByAccountSchema.index({ account_number: 1, createdAt: -1 });
+PositionsByAccountSchema.index({ account_number: 1, reference_date: -1 });

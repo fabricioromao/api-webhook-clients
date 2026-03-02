@@ -182,10 +182,13 @@ export class AccountsAssetsConsumer extends WorkerHost {
 
   private async generateZipFromPositions(assetTypes: AssetType[]) {
     const output = createWriteStream(this.filePath);
-    output.write('[');
+    await this.writeWithBackpressure(output, '[');
 
     let first = true;
     let batch: Array<{ nr_conta: string; nome_completo: string }> = [];
+    const seenAccounts = new Set<string>();
+    let duplicatedAccounts = 0;
+    let invalidAccounts = 0;
 
     const accountsCursor = this.accountsModel
       .find()
@@ -194,8 +197,21 @@ export class AccountsAssetsConsumer extends WorkerHost {
       .cursor({ batchSize: this.batchSize });
 
     for await (const account of accountsCursor) {
+      const accountNumber = this.normalizeAccountNumber(account.nr_conta);
+      if (!accountNumber) {
+        invalidAccounts++;
+        continue;
+      }
+
+      if (seenAccounts.has(accountNumber)) {
+        duplicatedAccounts++;
+        continue;
+      }
+
+      seenAccounts.add(accountNumber);
+
       batch.push({
-        nr_conta: account.nr_conta,
+        nr_conta: accountNumber,
         nome_completo: account.nome_completo,
       });
 
@@ -219,7 +235,13 @@ export class AccountsAssetsConsumer extends WorkerHost {
       }));
     }
 
-    output.write(']');
+    if (duplicatedAccounts || invalidAccounts) {
+      this.logger.warn(
+        `Accounts Assets: duplicadas ignoradas=${duplicatedAccounts}, sem nr_conta=${invalidAccounts}`,
+      );
+    }
+
+    await this.writeWithBackpressure(output, ']');
 
     await new Promise<void>((resolve, reject) => {
       output.on('finish', resolve);
@@ -243,8 +265,7 @@ export class AccountsAssetsConsumer extends WorkerHost {
     first: boolean;
     assetTypes: AssetType[];
   }) {
-    const accountNumbers = batch
-      .map((account) => account.nr_conta)
+    const accountNumbers = [...new Set(batch.map((account) => account.nr_conta))]
       .filter((value) => value);
 
     const positions = await this.positionsByAccountModel
@@ -270,7 +291,10 @@ export class AccountsAssetsConsumer extends WorkerHost {
         ativos,
       };
 
-      output.write(`${first ? '' : ','}${JSON.stringify(payload)}`);
+      await this.writeWithBackpressure(
+        output,
+        `${first ? '' : ','}${JSON.stringify(payload)}`,
+      );
       first = false;
     }
 
@@ -535,6 +559,19 @@ export class AccountsAssetsConsumer extends WorkerHost {
     if (value === null || value === undefined || value === '') return 0;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private normalizeAccountNumber(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+  }
+
+  private async writeWithBackpressure(
+    output: NodeJS.WritableStream,
+    data: string,
+  ) {
+    if (output.write(data)) return;
+    await new Promise<void>((resolve) => output.once('drain', resolve));
   }
 
   private async updateRequest(body: {

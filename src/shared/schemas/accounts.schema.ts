@@ -190,3 +190,6 @@ export class Accounts {
 }
 
 export const AccountsSchema = SchemaFactory.createForClass(Accounts);
+
+AccountsSchema.index({ nr_conta: 1 });
+AccountsSchema.index({ documento_cpf_cnpj: 1 });
